@@ -1,0 +1,6 @@
+; SA-D6.  Every warning is an error, in every directory of this repository.
+; No vendor stanza yet: the kanon pin has not landed (Stage K has not opened).
+(env
+ (_
+  (flags
+   (:standard -warn-error +a))))

@@ -1,0 +1,7 @@
+(copy_files ../rows/fp.ml)
+(copy_files ../rows/fp.mli)
+(copy_files ../rows/row.ml)
+(copy_files ../rows/lower.ml)
+
+(test
+ (name regression))

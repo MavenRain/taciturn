@@ -1,0 +1,6 @@
+; Stage 0 spike (a), the OCaml side.  Modules in dependency order:
+; fp, row, lower, r1cs, wtns, main, rows.  The entry module is rows.ml, so
+; dune builds _build/default/spike/rows/rows.exe;  the driver sits in
+; main.ml as the brief section 3.2 asks.
+(executable
+ (name rows))
