@@ -1,0 +1,3 @@
+(executable
+ (name taciturn)
+ (libraries taciturn_kernel taciturn_surface))

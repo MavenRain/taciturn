@@ -1,0 +1,5 @@
+(tests
+ (names main)
+ (deps (source_tree fixtures))
+ (action (run %{test} fixtures))
+ (libraries taciturn_kernel taciturn_surface))

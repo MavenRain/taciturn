@@ -179,3 +179,190 @@ Whole run: `zsh /Users/oobi/Documents/taciturn/dev/spike-gates.sh` printed
 S0-G7 and S0-G8, now that circom and snarkjs are installed.
 
 RATIFY:
+
+## 2026-09-06 M0 Stage A
+
+Stage A is "pin, skeleton and the witness quantity".  It delivers the pin,
+the vendor tree, the skeleton, SPEC.md, the carried modules, the witness
+quantity, the surface and the minimal driver.  No checker, no evaluator, no
+erasure, no zk fragment, no row IR and no emission land here;  those are
+Stages B to E.  Stage 0's spike tree is untouched (D-M0-9).
+
+### Deliverables
+
+- `PIN` with the one line de40d65, `.gitmodules` with the three lines of
+  the brief section 3.1, and the vendor/kanon clone detached at
+  de40d65c53d799987a3b96be2bd3bad7aeaab8fe.
+- The amended `README.md`, the root `dune` ending in `(data_only_dirs
+  vendor)`, and `.gitignore` with `vendor/kanon/_build/`.
+- `SPEC.md`, 323 lines, in the order the brief section 3.5 sets: the claim,
+  the closed grammar, `## R0 counts` with the eight pin lines, the four
+  marks with the NORMATIVE occurrence rule and the well-formedness sum, the
+  sugar table, the encoder subset with the amended SD-D15 row citing both
+  kanon sites, the disclosure ledger, the wire order convention (D-M0-5),
+  the three namespaces zk, sym and pre (D-M0-8), and the hand-off notes.
+- The eight carried files `lib/level.ml`, `lib/level.mli`,
+  `lib/literal.ml`, `lib/budget.ml`, `lib/budget.mli`, `lib/error.ml`,
+  `lib/shape.ml` and `lib/quantity.ml`, with `dev/CARRIED.md` and
+  `dev/carry-check.sh`.
+- `lib/quantity.ml` with the four marks `Zero | W | One | Many`, the
+  sixteen mul arms of the brief section 4, and the four to_string strings
+  `0`, `w`, `1` and `many`.
+- `lib/spec_count.ml`, whose every printed number is a `List.length` of the
+  list printed beside it, and `dev/r0-count.sh`, which diffs the SPEC.md
+  block against the driver output.
+- `surface/lexer.ml` and `surface/parser.ml`, carried as algorithm with a
+  kanon line cited above each mirrored function, with ZKMARK (`zk def`) and
+  WMARK (`w`), both D-M0-3, and `parse : string -> (decl list, Error.t)
+  result` with no exception in either file.
+- `bin/taciturn.ml`, the minimal driver: `spec-count` prints and exits 0,
+  the other seven verbs name their stage on stderr and exit 64.
+- `test/main.ml` and twelve fixtures a01 to a12, `dev/stage-a-gates.sh`.
+
+### Gate table
+
+| id | verdict | evidence line |
+| --- | --- | --- |
+| SA-G1 | PASS | `SA-G1 PASS OK build: 0 errors, 0 warnings` |
+| SA-G2 | PASS | `SA-G2 PASS CARRY-OK with 8 OK rows, exit 0` |
+| SA-G3 | PASS | `SA-G3 PASS R0-COUNT OK with [formers 2: Lan Ran] [schema constructors 4: In Elim Sec Out] [shapes declared 5: SPi SColl SPar SMu SNu]` |
+| SA-G4 | PASS | `SA-G4 PASS PARSE-OK 12/12, fd counts 12 .tac files, exit 0` |
+| SA-G5 | PASS | `SA-G5 PASS PIN de40d65 on 1 line, vendor/kanon HEAD de40d65c53d799987a3b96be2bd3bad7aeaab8fe, .gitmodules 3 of 3 lines matched` |
+| SA-G6 | PASS | `SA-G6 PASS house: the section 5 pattern over lib, surface, bin and test prints 2 hits over 13 ml and mli files, 2 of them the disclosed carried prose lines lib/error.ml:7 and lib/error.ml:8, 0 elsewhere` |
+| SA-G7 | PASS | `SA-G7 PASS lines quantity.ml 72/90 lexer.ml 193/200 parser.ml 474/600 taciturn.ml 57/150 SPEC.md 323/400` |
+| SA-G8 | PASS | `SA-G8 PASS prose: 0 dash characters over 70 tracked and untracked files, 0 one-space sentence breaks in README.md, SPEC.md and dev/*.md` |
+
+`zsh /Users/oobi/Documents/taciturn/dev/stage-a-gates.sh` printed `GATES-OK`
+and exited 0.  The judge reran SA-G2, SA-G3, SA-G4, SA-G5, SA-G6 and SA-G7
+by hand outside the runner and read the same figures: `CARRY-OK` over eight
+OK rows with exit 0, `R0-COUNT OK` with exit 0, `PARSE-OK 12/12` with exit 0
+beside twelve `.tac` files from `fd`, `de40d65` from `cat PIN` with
+`de40d65c53d799987a3b96be2bd3bad7aeaab8fe` from `rev-parse HEAD` and the
+three `.gitmodules` lines from `od -c`, the brief section 5 pattern printing
+its two carried prose lines and nothing else, and `wc -l` at 72, 193, 474,
+57 and 323.
+
+### D-A-1, the interim pin, PROVISIONAL
+
+Silence is the default and a written veto halts the stage.  M0-PLAN section
+9 and RATIFICATIONS.md:24 order Stage A after kanon Stage K lands, because
+Field p at Stage C needs Stage K's bignum Nat.  kanon stands at Stage H.
+Stage A and Stage B need nothing from Stage K, so this stage adopts
+PIN = de40d65 now, records the pin in dev/CARRIED.md as interim, and fixes
+the re-pin in six steps:
+
+1.  Write the Stage K sha into `/Users/oobi/Documents/taciturn/PIN`.
+2.  `git -C /Users/oobi/Documents/taciturn/vendor/kanon fetch origin`, then
+    `git -C /Users/oobi/Documents/taciturn/vendor/kanon checkout -q THE-K-SHA`.
+3.  `zsh /Users/oobi/Documents/taciturn/dev/carry-check.sh` and read every
+    FAIL row.
+4.  Re-carry every drifted file line by line against
+    `git -C /Users/oobi/Documents/taciturn/vendor/kanon show THE-K-SHA:lib/NAME.ml`,
+    keeping the one header line, and update the diff count in
+    dev/CARRIED.md.
+5.  Rerun every gate through
+    `zsh /Users/oobi/Documents/taciturn/dev/stage-a-gates.sh` until it
+    prints GATES-OK.
+6.  Print one commit line for the user:
+    `git -C /Users/oobi/Documents/taciturn commit -s -m 'M0 Stage A: re-pin at kanon Stage K'`.
+
+Stage C does not open before the re-pin is committed.
+
+### D-A-2, the two deferred carried files, PROVISIONAL
+
+Silence is the default.  `lib/prim.ml` and `lib/positivity.ml` defer to
+Stage B with the kernel.  Both read `lib/term.ml`, and prim.ml also reads
+`lib/rules.ml` and `lib/value.ml`, none of which Stage A delivers, so a byte
+for byte carry does not compile and fails SA-G1.  SA-B5 is waived on this
+ground for these two files only;  any other module a carried file needs and
+Stage A does not deliver still halts.  The carried set at Stage A is
+level.ml, level.mli, literal.ml, budget.ml, budget.mli, error.ml, shape.ml
+and quantity.ml: eight files, six modules.  Every place the Stage A brief
+says seven carried modules reads as six at Stage A plus two at Stage B.
+dev/CARRIED.md keeps its paragraph on the two deferred files.  Stage B
+carries prim.ml and positivity.ml with the kernel.
+
+### Numbers
+
+The eight carried files with their diff counts, every one recomputed by the
+judge against `git -C /Users/oobi/Documents/taciturn/vendor/kanon show de40d65:lib/NAME`:
+
+| file | diff lines |
+| --- | --- |
+| lib/level.ml | 4 |
+| lib/level.mli | 4 |
+| lib/literal.ml | 4 |
+| lib/budget.ml | 4 |
+| lib/budget.mli | 4 |
+| lib/error.ml | 2 |
+| lib/shape.ml | 2 |
+| lib/quantity.ml | 66 |
+
+Fixtures: 12 `.tac` files, a01 to a12, and `PARSE-OK 12/12`.
+
+SA-G7 line counts: quantity.ml 72 of 90, lexer.ml 193 of 200, parser.ml 474
+of 600, taciturn.ml 57 of 150, SPEC.md 323 of 400.
+
+### Verifier findings and their dispositions
+
+- F1, high, `dev/stage-a-gates.sh` SA-G6 block, FIXED 2026-09-06.  The gate
+  as first coded ran the brief section 5 banned-token pattern over an awk
+  comment-stripped copy of each file, which is a weaker gate than the
+  literal command the brief names, and no `args.waive` for SA-B6 was
+  present.  The raw command prints exactly two hits, `lib/error.ml:7` and
+  `lib/error.ml:8`, both of them carried kanon doc-comment prose holding
+  the word "for", and a carried file admits no delta beyond its header
+  line, so the prose cannot be reworded without failing CARRY.  FIXED by
+  the second remedy the finding offers: the SA-G6 leg is now the literal
+  `rg` of the brief section 5 over lib, surface, bin and test with the two
+  globs, followed by a narrow disclosed per-line exclusion of those two
+  lines in the form of kanon `dev/house.sh`, each exclusion pinned to the
+  exact text of its line so any edit to either line drops the exclusion and
+  reports the hit.  The judge reran the raw command and read the same two
+  lines and nothing else, and read the SA-G6 block of the script.
+- J1, low, `test/main.ml:27`, DISCLOSED and admitted at Stage A.  The line
+  is `try In_channel.with_open_text path In_channel.input_all with
+  Sys_error _m -> ""`, the one exception handler in the tree.  The house
+  rules of stage-0-brief section 3.2 ban exceptions, and the SA-G6 pattern
+  does not name `try`, so no gate reads this line.  It is the single host
+  boundary of the test harness, it is named in the file's own doc comment,
+  and the alternatives are `Sys.readdir`, whose array type the same rules
+  ban, or a racy `Sys.file_exists`.  The judge admits it at Stage A on the
+  ground that it is disclosed, total and confined to the test harness, and
+  hands it to Stage B to remove or to admit in writing.
+
+### Hand-off notes for Stage B
+
+- The `Extern` entry arrives at Stage B with the ninth R0 line of D-M0-4,
+  `global kinds 4: Def Axiom Prim Extern`.  Stage A moves no count, so the
+  R0 block holds the eight pin lines and nothing else (SPEC.md:314-316).
+- The occurrence rule of SPEC.md section 3.1 is NORMATIVE at Stage A and
+  Stage B enforces it in the checker: no occurrence of a W-marked binder
+  may sit at a One-stamped or a Many-stamped point, and `prove` is the only
+  exception (R-Q3).  The sum of section 3.2 is the well-formedness check
+  beside it, admissible in {Zero, W} at a W binder.
+- `lib/prim.ml` and `lib/positivity.ml` arrive with the kernel at Stage B
+  under D-A-2, together with `lib/term.ml`, `lib/rules.ml` and
+  `lib/value.ml`.
+
+### Run provenance
+
+The first run, `wf_ffb65176-39e` (session 8229e2df), died at 10:25 PDT on
+the session usage limit inside the Builder, right after it wrote SPEC.md
+chunk 2.  The session is gone, so the run could not resume.  This stage
+completed as the restart run `stage-A-restart-1` (session 151e76ab,
+2026-09-06), which kept every byte the dead Builder had written and
+finished the stage from there.
+
+RATIFY:
+
+### Index state and the commit block
+
+The Closer read `0 staged, HEAD 55e9393`.
+
+```
+git -C /Users/oobi/Documents/taciturn add -A
+git -C /Users/oobi/Documents/taciturn commit -s -m 'M0 Stage A: pin, skeleton, witness quantity'
+```
+
+No agent staged anything at any point in this stage.
