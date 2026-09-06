@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/error.ml, delta: this header line only *)
+(* carried from kanon de40d65 lib/error.ml, delta: this header line, the two extern arms Extern_signature and Extern_undisclosed of Stage B, brief 3.3, and the two Builder 2 arms Usage of the sum of SPEC.md section 3.2 and Extern_clash of the ledger name clash, brief 3.5 *)
 (** Kernel and surface errors.  Stage B extends this sum with the check
     errors;  every consumer matches it exhaustively, so a new arm is a
     compile error at every reader before it is a silent fallthrough.
@@ -34,6 +34,25 @@ type t =
   | Index_above_universe of string
       (** M1 Stage G:  an index type is above the declared level (A5,
           kan-lang-tot-pin/lib/check.ml:1820-1823) *)
+  | Extern_signature of string
+      (** M0 Stage B:  the length of the per-argument quantity signature
+          of an extern differs from the binder count of its type, so the
+          extern is refused before any call is checked (M0-PLAN section 4
+          delta 3, brief 3.3) *)
+  | Extern_undisclosed of string
+      (** M0 Stage B:  an extern has no row in the disclosure ledger of
+          SPEC.md section 6, so it refuses to link (M0-PLAN section 4
+          delta 3, brief 3.3) *)
+  | Usage of string
+      (** M0 Stage B, brief 3.5:  the counted usage of a binder is not
+          admissible in its declared mark (SPEC.md section 3.2).  The
+          sum is a well-formedness check and not the occurrence rule, so
+          it carries its own arm and a gate line names which rule
+          refused *)
+  | Extern_clash of string
+      (** M0 Stage B, brief 3.5:  a definition carries the name of a row
+          in the disclosure ledger, so the file would define a name the
+          ledger declares as believed or as foreign *)
 
 let message (e : t) : string =
   match e with
@@ -51,6 +70,10 @@ let message (e : t) : string =
   | Budget_exhausted m -> m
   | Index_not_zero m -> m
   | Index_above_universe m -> m
+  | Extern_signature m -> m
+  | Extern_undisclosed m -> m
+  | Usage m -> m
+  | Extern_clash m -> m
 
 let to_string (e : t) : string =
   match e with
@@ -68,3 +91,7 @@ let to_string (e : t) : string =
   | Budget_exhausted m -> "budget: " ^ m
   | Index_not_zero m -> "index not zero: " ^ m
   | Index_above_universe m -> "index above universe: " ^ m
+  | Extern_signature m -> "extern signature: " ^ m
+  | Extern_undisclosed m -> "extern undisclosed: " ^ m
+  | Usage m -> "usage: " ^ m
+  | Extern_clash m -> "extern clash: " ^ m

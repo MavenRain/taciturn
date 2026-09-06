@@ -1,5 +1,21 @@
 (tests
  (names main)
- (deps (source_tree fixtures))
- (action (run %{test} fixtures))
+ (modules main)
+ (deps (source_tree fixtures) (source_tree check) (source_tree neg))
+ (action (run %{test} .))
+ (libraries taciturn_kernel taciturn_surface))
+
+(rule
+ (alias runtest)
+ (deps ../dev/strip-ocaml-tests.sh ../dev/strip-ocaml.awk)
+ (action (run zsh %{dep:../dev/strip-ocaml-tests.sh})))
+
+(test
+ (name link_review)
+ (modules link_review)
+ (libraries taciturn_kernel taciturn_surface))
+
+(test
+ (name kernel_review)
+ (modules kernel_review)
  (libraries taciturn_kernel taciturn_surface))

@@ -1,18 +1,33 @@
-(** The parse test of Stage A, brief section 3.8.  Every .tac file of the
-    fixtures directory parses, prints, parses again, and the two
-    declaration lists compare with structural equality.  The exit value
-    is 0 when every file passes and 1 otherwise, so the PARSE gate reads
-    one line.
+(** The kernel suite of the Stage B brief section 3.7.  The executable
+    takes one directory.  A directory that holds a fixtures directory is
+    the test root and runs three legs;  a directory of .tac files runs the
+    parse leg alone, which is the Stage A behaviour the PARSE gate of
+    stage-a-gates.sh reads.
+
+    PARSE walks test/fixtures:  every file parses, prints, parses again,
+    and the two declaration lists compare with structural equality.
+    CHECK walks test/check:  every file parses, elaborates and checks
+    against the initial environment.  NEG walks test/neg:  every file is
+    refused, and the tag of the refusal, which is the text ahead of the
+    first colon of the error line, names the Error constructor, so the leg
+    asserts that every word of the tag appears in the name of the file.
+    A parse error carries the tag "line N, column M", whose words appear
+    in no file name, so a negative that fails to parse fails the leg.
+
+    The exit value is 0 when the three legs pass and 1 otherwise, and an
+    empty leg is a failure, so a lost directory is loud.
 
     The directory listing goes through [Sys.command] and a text file
     because the house rules keep the vector type of [Sys.readdir] out of
-    this repository.  A listing that does not come back leaves an empty
-    list, which prints PARSE-FAIL 0/0, so a lost directory fails loudly.
+    this repository.  The text walks go through [String.to_seq] and
+    [String.starts_with], which are total, so no range is computed and no
+    partial slice appears.
 
-    Each file also prints its mark product, the fold of every binder mark
-    of the file under [Quantity.mul].  The a11 fixture holds one witness
-    binder and one linear binder, so its product is the witness mark and
-    the mul table of lib/quantity.ml has a printed reader (SA-M1). *)
+    Each fixture also prints its mark product, the fold of every binder
+    mark of the file under [Quantity.mul].  The a11 fixture holds one
+    witness binder and one linear binder, so its product is the witness
+    mark and the mul table of lib/quantity.ml has a printed reader
+    (SA-M1). *)
 
 open Taciturn_kernel
 open Taciturn_surface
@@ -80,7 +95,7 @@ let round_trip (src : string) : (Parser.decl list, string) result =
   in
   if ds = again then Ok ds else Error "the printed text parses to another tree"
 
-let check (dir : string) (file : string) : bool =
+let parse_one (dir : string) (file : string) : bool =
   let name = Filename.remove_extension file in
   round_trip (text_of (Filename.concat dir file))
   |> Result.fold
@@ -92,21 +107,89 @@ let check (dir : string) (file : string) : bool =
          print_endline (Printf.sprintf "PARSE %s FAIL: %s" name m);
          false)
 
-let run (dir : string) : unit =
-  let files = listing dir in
-  let total = List.length files in
-  let ok = List.filter (check dir) files |> List.length in
-  let every = Int.equal ok total && total > 0 in
+(** The CHECK leg.  A well typed file elaborates and checks against
+    [Global.initial], which is what the check verb of the driver does. *)
+let check_one (dir : string) (file : string) : bool =
+  let name = Filename.remove_extension file in
+  Elab.check (text_of (Filename.concat dir file))
+  |> Result.fold
+       ~ok:(fun (_rows : (string * Global.entry) list) ->
+         print_endline (Printf.sprintf "CHECK %s OK" name);
+         true)
+       ~error:(fun (e : Error.t) ->
+         print_endline (Printf.sprintf "CHECK %s FAIL: %s" name (Error.to_string e));
+         false)
+
+(** The tag of an error line, which is the text ahead of the first colon.
+    [Error.to_string] writes the constructor name there in words, so
+    "extern clash" is [Error.Extern_clash]. *)
+let tag_of (e : Error.t) : string =
+  match String.split_on_char ':' (Error.to_string e) with
+  | [] -> ""
+  | head :: _rest -> head
+
+(** [needle] appears somewhere in [hay].  The walk drops one character at
+    a time through the character sequence, so it computes no range. *)
+let rec contains_seq (hay : char Seq.t) (needle : string) : bool =
+  match hay () with
+  | Seq.Nil -> String.starts_with ~prefix:needle ""
+  | Seq.Cons ((_c : char), (rest : char Seq.t)) ->
+      if String.starts_with ~prefix:needle (String.of_seq hay) then true
+      else contains_seq rest needle
+
+let contains (hay : string) (needle : string) : bool =
+  contains_seq (String.to_seq hay) needle
+
+(** The negative names the refusal it must print when every word of the
+    tag appears in the name of the file. *)
+let named (name : string) (tag : string) : bool =
+  String.split_on_char ' ' tag |> List.for_all (contains name)
+
+let neg_one (dir : string) (file : string) : bool =
+  let name = Filename.remove_extension file in
+  Elab.check (text_of (Filename.concat dir file))
+  |> Result.fold
+       ~ok:(fun (_rows : (string * Global.entry) list) ->
+         print_endline (Printf.sprintf "NEG %s FAIL: the file checks" name);
+         false)
+       ~error:(fun (e : Error.t) ->
+         let tag : string = tag_of e in
+         let ok : bool = named name tag in
+         print_endline
+           (Printf.sprintf "NEG %s %s: %s" name (if ok then "OK" else "FAIL") tag);
+         ok)
+
+(** One leg.  An empty directory prints 0/0 and fails. *)
+let leg (label : string) (one : string -> string -> bool) (dir : string) : bool =
+  let files : string list = listing dir in
+  let total : int = List.length files in
+  let ok : int = List.filter (one dir) files |> List.length in
+  let every : bool = Int.equal ok total && total > 0 in
   print_endline
-    (Printf.sprintf "%s %d/%d" (if every then "PARSE-OK" else "PARSE-FAIL") ok total);
+    (Printf.sprintf "%s-%s %d/%d" label (if every then "OK" else "FAIL") ok total);
+  every
+
+let parse_only (dir : string) : unit = exit (if leg "PARSE" parse_one dir then 0 else 1)
+
+(** The three legs in order, then the one line the SUITE gate reads.
+    Every leg runs, so one failure never hides another. *)
+let suite (dir : string) : unit =
+  let p : bool = leg "PARSE" parse_one (Filename.concat dir "fixtures") in
+  let c : bool = leg "CHECK" check_one (Filename.concat dir "check") in
+  let n : bool = leg "NEG" neg_one (Filename.concat dir "neg") in
+  let every : bool = p && c && n in
+  print_endline (if every then "SUITE-KERNEL OK" else "SUITE-KERNEL FAIL");
   exit (if every then 0 else 1)
+
+let run (dir : string) : unit =
+  if Sys.file_exists (Filename.concat dir "fixtures") then suite dir else parse_only dir
 
 (** The default directory sits beside the executable because dune copies
     every source file of test/ into the build tree.  [Arg] hands the
     first plain argument to [run], which always leaves through [exit], so
     the last line runs only with no argument at all. *)
-let default_dir : string = Filename.concat (Filename.dirname Sys.executable_name) "fixtures"
+let default_dir : string = Filename.dirname Sys.executable_name
 
 let () =
-  Arg.parse [] run "usage: main.exe FIXTURES-DIR";
+  Arg.parse [] run "usage: main.exe TEST-DIR";
   run default_dir

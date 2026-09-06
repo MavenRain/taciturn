@@ -72,7 +72,10 @@ which is kanon SA-D1.
 `taciturn spec-count` prints this block and dev/r0-count.sh diffs the two
 texts, so a count that moves without an edit here fails the R0-COUNT gate.
 Stage A moves no count:  the witness quantity adds a mark and adds no
-former, no schema constructor and no shape.
+former, no schema constructor and no shape.  Stage B moves no count
+either:  the `Extern` kind is a global kind and it is not a former, not
+a schema constructor and not a shape, so it adds the ninth line below
+and changes none of the eight above it.
 
 ```
 formers 2: Lan Ran
@@ -83,11 +86,14 @@ named rules declared 3: proof-irrelevance subsingleton-large-elimination literal
 named rules present 3: proof-irrelevance subsingleton-large-elimination literal-fast-path
 eta rows 3: Ran-SPi Lan-SPi Ran-SColl
 no eta 3: Lan-SColl Ran-SMu Lan-SMu
+global kinds 4: Def Axiom Prim Extern
 ```
 
-D-M0-4 adds a ninth line, `global kinds 4: Def Axiom Prim Extern`.  The
-Extern kind lands with lib/global.ml at Stage B, so the ninth line is a
-hand-off note here and Stage B prints it beside the eight lines above.
+The ninth line is D-M0-4's and it lands at Stage B with the `Extern`
+entry of lib/global.ml.  Its number is the length of `Global.kinds` and
+its companion `Global.kind_name` is total over the entry sum, so a fifth
+kind is a compile error before it is a silent drift.  The three pinned
+numbers above do not move, so the milestone row is unaffected.
 
 ## 3 Quantity, the four marks
 
@@ -244,27 +250,39 @@ encoder (SD-D24).
 
 ## 6 The disclosure ledger
 
-Every extern and every axiom has one row here.  An extern with no row
+Every built-in extern and axiom has one row here.  An extern with no row
 refuses to link, and an axiom reaches this ledger and never the code
 section.  The quantity signature is per argument (delta 3 of the M0
 plan):  it is the mark stamped on the position, and the occurrence rule
-of section 3.1 reads it.  A `w` position takes a `W`, a `One` or a
+of section 3.1 reads it.  Linking normalizes a postulate's type and checks
+both the arity and binder marks against its disclosed signature.  This
+keeps aliases and annotations from changing the marks of an extern call.
+A `w` position takes a `W`, a `One` or a
 `Many` binder and refuses a `Zero` binder, so a `w` position is what
-keeps witness data out of a public channel.  Every row below is declared
-at Stage A and linked at Stage B.
+keeps witness data out of a public channel.  Stage A declared all ten
+rows.  Stage B links the two axioms, because the axioms verb of the
+driver prints them from the file it reads, and lib/disclosure.ml carries
+the same ten rows in code so that an extern with no row here refuses to
+link.  The eight externs link at Stage C, because each one needs
+`Field p` or the row IR, which Stage C delivers.
+
+The `axioms` verb reports every checked axiom and extern declared by the
+file, including supporting type postulates and names outside this fixed
+ledger.  Each row prints the actual checked type; a matching ledger row
+adds its description and expected quantity signature.
 
 | name | kind | text | quantity signature | state |
 | --- | --- | --- | --- | --- |
-| `field.add` | extern | the sum of two field values at the prime p | `(w a : Field p) -> (w b : Field p) -> Field p` | declared at Stage A, linked at Stage B |
-| `field.mul` | extern | the product of two field values at the prime p | `(w a : Field p) -> (w b : Field p) -> Field p` | declared at Stage A, linked at Stage B |
-| `field.inv` | extern | the multiplicative inverse of a field value, with zero mapped to zero | `(w a : Field p) -> Field p` | declared at Stage A, linked at Stage B |
-| `field.eq` | extern | the equality test of two field values, one for equal and zero for other | `(w a : Field p) -> (w b : Field p) -> Field p` | declared at Stage A, linked at Stage B |
-| `select` | extern | the only elimination of a `Bit`, which returns the second argument at one and the third at zero | `(w b : Bit) -> (w x : Field p) -> (w y : Field p) -> Field p` | declared at Stage A, linked at Stage B |
-| `alloc` | extern | the wire allocator, which appends the rows of one call and returns the wire index of its value | `(w v : Field p) -> Wire` | declared at Stage A, linked at Stage B |
-| `prove` | extern | the declassifier, which reads a witness at `w` and returns a public proof | `(many R : Circuit) -> (many x : Public) -> (w wit : Witness) -> Proof R x` | declared at Stage A, linked at Stage B |
-| `verifyRaw` | extern | the raw verifier, which returns one on an accepted proof and zero on any other | `(many R : Circuit) -> (many x : Public) -> (many v : Proof R x) -> Field p` | declared at Stage A, linked at Stage B |
-| `sound` | axiom | `verifyRaw R x v = 1 -> Exists w, R x w = 1`, the soundness of the raw verifier | `(many R : Circuit) -> (many x : Public) -> (many v : Proof R x) -> (many h : verifyRaw R x v = 1) -> Exists w, R x w = 1` | declared at Stage A, linked at Stage B |
-| `verify_reflect` | axiom | a verifier output wire constrained to one gives the fibre `Proof R x` | `(many R : Circuit) -> (many x : Public) -> (many o : Field p) -> (many h : o = 1) -> Proof R x` | declared at Stage A, linked at Stage B |
+| `field.add` | extern | the sum of two field values at the prime p | `(w a : Field p) -> (w b : Field p) -> Field p` | declared at Stage A, linked at Stage C |
+| `field.mul` | extern | the product of two field values at the prime p | `(w a : Field p) -> (w b : Field p) -> Field p` | declared at Stage A, linked at Stage C |
+| `field.inv` | extern | the multiplicative inverse of a field value, with zero mapped to zero | `(w a : Field p) -> Field p` | declared at Stage A, linked at Stage C |
+| `field.eq` | extern | the equality test of two field values, one for equal and zero for other | `(w a : Field p) -> (w b : Field p) -> Field p` | declared at Stage A, linked at Stage C |
+| `select` | extern | the only elimination of a `Bit`, which returns the second argument at one and the third at zero | `(w b : Bit) -> (w x : Field p) -> (w y : Field p) -> Field p` | declared at Stage A, linked at Stage C |
+| `alloc` | extern | the wire allocator, which appends the rows of one call and returns the wire index of its value | `(w v : Field p) -> Wire` | declared at Stage A, linked at Stage C |
+| `prove` | extern | the declassifier, which reads a witness at `w` and returns a public proof | `(many R : Circuit) -> (many x : Public) -> (w wit : Witness) -> Proof R x` | declared at Stage A, linked at Stage C |
+| `verifyRaw` | extern | the raw verifier, which returns one on an accepted proof and zero on any other | `(many R : Circuit) -> (many x : Public) -> (many v : Proof R x) -> Field p` | declared at Stage A, linked at Stage C |
+| `sound` | axiom | `verifyRaw R x v = 1 -> Exists w, R x w = 1`, the soundness of the raw verifier | `(many R : Circuit) -> (many x : Public) -> (many v : Proof R x) -> (many h : verifyRaw R x v = 1) -> Exists w, R x w = 1` | linked at Stage B |
+| `verify_reflect` | axiom | a verifier output wire constrained to one gives the fibre `Proof R x` | `(many R : Circuit) -> (many x : Public) -> (many o : Field p) -> (many h : o = 1) -> Proof R x` | linked at Stage B |
 
 `prove` is the one exception of the occurrence rule of section 3.1:  its
 witness parameter is the single place where `W` data crosses into a
@@ -309,15 +327,23 @@ Each set carries a digest of its implementation and the digest of the
 circuit reads all three.  A missing namespace is a link error at load
 time, which the Stage 0 spike shows.
 
-## 9 Hand-off notes for Stage B
+## 9 Hand-off notes for Stage C
 
-The ninth R0 line, `global kinds 4: Def Axiom Prim Extern` (D-M0-4),
-arrives with the `Extern` entry at Stage B.  Stage A moves no count, so
-the R0 block above holds the eight lines of the pin and nothing else.
+The `RField` arm of delta 2 arrives at Stage C.  `lib/eterm.ml` is not
+carried at Stage B, because the Stage B row of the plan does not name it
+and the Stage C row does, so the repr sum gains its arm beside `RI31`
+when `Field p` lands.
 
-The occurrence rule of section 3.1 is normative at Stage A and Stage B
-enforces it in the checker.  The sum of section 3.2 is the
-well-formedness check beside it.
+The two erasures of delta 1 arrive at Stage C with `lib/erase.ml`.  They
+run over one parameterised traversal:  the prover erasure keeps
+`{W, One, Many}` and the public erasure keeps `{One, Many}`.  Section 3.2
+declares them and no file implements them yet.
 
-`lib/prim.ml` and `lib/positivity.ml` arrive with the kernel at Stage B
-(D-A-2).  Both read `lib/term.ml`, which Stage A does not deliver.
+Four of the nine required negatives of the plan arrive at Stage C,
+because each one reads the zk fragment or `Field p`:  an `Elim` on a
+`Bit` outside `select`, a `Nat` at runtime inside zk, a `Vec` at a
+runtime `n` inside zk, and a `Ran SPi` at runtime that is not fully
+applied.  Stage B delivers the other five.
+
+The eight extern rows of the ledger of section 6 link at Stage C.  Each
+one needs `Field p` or the row IR.  The two axioms link at Stage B.

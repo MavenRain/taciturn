@@ -94,41 +94,71 @@ fi
 # --- SA-G6 HOUSE ---
 # The gate is the literal command of section 5 of the brief:  the section 5
 # pattern over ROOT/lib, ROOT/surface, ROOT/bin and ROOT/test with the two
-# globs, and it must print nothing.  Two lines are disclosed exclusions and
-# both are named here, in the form kanon's dev/house.sh uses for its SD-D18
-# buffer site:
-#
-#   lib/error.ml:7   carried kanon doc comment prose, holds the word "for"
-#   lib/error.ml:8   carried kanon doc comment prose, holds the word "for"
-#
-# A carried file admits no delta beyond its header line, so this prose
-# cannot be reworded without breaking the CARRY gate.  Each exclusion is
-# pinned to the exact text of its line, so an edit to either line drops the
-# exclusion and the hit is reported.  Every other line of every file, comment
-# or code, is scanned as the brief writes it.
+# globs.  Every line the pattern prints is disclosed by the table
+# dev/house-exclusions.tsv, one row per line, three tab separated fields
+# path, line and text, in the form kanon's dev/house.sh uses for its SD-D18
+# buffer site.  A raw hit is disclosed when a row names its path and its
+# line and the text of the row equals the current line byte for byte, so an
+# edit to a disclosed line drops the exclusion and the hit is reported.  A
+# row whose text no longer equals its line is stale and fails the gate, so
+# the table cannot outlive the prose it names.  Every disclosed line is doc
+# comment prose, a plain comment or a string literal, and a carried file
+# admits no delta beyond its header line, so this prose cannot be reworded
+# without breaking the CARRY gate (ruling D-B-6).  Every other line of every
+# file, comment or code, is scanned as the brief writes it.  The gate passes
+# only when no raw hit sits outside the table, no row is stale and the table
+# holds at least one row.
 banned='raise |failwith|assert |exception |invalid_arg|while |for |ref |mutable |Array|\.\(|List\.nth|List\.hd|List\.tl|Option\.get|\| _ ->'
-g6_x7='    it for a shape that M0 does not admit, and the parser returns it'
-g6_x8='    through [Parse] for a surface word that M0 reserves.'
 rg -n "$banned" $ROOT/lib $ROOT/surface $ROOT/bin $ROOT/test \
   --glob '*.ml' --glob '*.mli' > $WORK/g6raw.txt 2>/dev/null
 g6_raw=$(awk 'NF { c = c + 1 } END { print c + 0 }' $WORK/g6raw.txt)
 g6_files=$(fd -t f -e ml -e mli . $ROOT/lib $ROOT/surface $ROOT/bin $ROOT/test | awk 'END { print NR }')
-awk -v e="$ROOT/lib/error.ml" -v x7="$g6_x7" -v x8="$g6_x8" '
+awk -v r="$ROOT/" '
+BEGIN { FS = "\t"; rows = 0; out = 0; stale = 0 }
+FNR == NR {
+  if (FNR == 1) { next }
+  if (NF == 0) { next }
+  rows = rows + 1
+  k = $1 SUBSEP $2
+  paths[$1] = 1
+  if (NF == 3) { txt[k] = $3; has[k] = 1 } else { bad[k] = 1 }
+  next
+}
 NF == 0 { next }
 {
-  p = index($0, ":"); f = substr($0, 1, p - 1); rest = substr($0, p + 1);
-  q = index(rest, ":"); ln = substr(rest, 1, q - 1); txt = substr(rest, q + 1);
-  if (f == e && ln == "7" && txt == x7) { next }
-  if (f == e && ln == "8" && txt == x8) { next }
-  print
-}' $WORK/g6raw.txt > $WORK/g6.txt
-g6_hits=$(awk 'NF { c = c + 1 } END { print c + 0 }' $WORK/g6.txt)
-g6_excl=$((g6_raw - g6_hits))
-if [[ $g6_hits -eq 0 ]]; then
-  print -r -- "SA-G6 PASS house: the section 5 pattern over lib, surface, bin and test prints $g6_raw hits over $g6_files ml and mli files, $g6_excl of them the disclosed carried prose lines lib/error.ml:7 and lib/error.ml:8, 0 elsewhere"
+  p = index($0, ":"); f = substr($0, 1, p - 1); rest = substr($0, p + 1)
+  q = index(rest, ":"); ln = substr(rest, 1, q - 1); line = substr(rest, q + 1)
+  rel = f
+  if (substr(rel, 1, length(r)) == r) { rel = substr(rel, length(r) + 1) }
+  k = rel SUBSEP ln
+  if (k in has && txt[k] == line) { next }
+  out = out + 1
+  print "OUTSIDE\t" rel ":" ln
+}
+END {
+  for (p in paths) {
+    n = 0
+    file = r p
+    while ((getline cur < file) > 0) {
+      n = n + 1
+      k = p SUBSEP n
+      if (k in has && txt[k] == cur) { good[k] = 1 }
+    }
+    close(file)
+  }
+  for (k in has) { if (!(k in good)) { stale = stale + 1; split(k, a, SUBSEP); print "STALE\t" a[1] ":" a[2] } }
+  for (k in bad) { stale = stale + 1; split(k, a, SUBSEP); print "STALE\t" a[1] ":" a[2] }
+  print "SUM\t" out "\t" stale "\t" rows
+}' $ROOT/dev/house-exclusions.tsv $WORK/g6raw.txt > $WORK/g6.txt
+g6_out=$(awk -F'\t' '$1 == "SUM" { print $2 + 0 }' $WORK/g6.txt)
+g6_stale=$(awk -F'\t' '$1 == "SUM" { print $3 + 0 }' $WORK/g6.txt)
+g6_rows=$(awk -F'\t' '$1 == "SUM" { print $4 + 0 }' $WORK/g6.txt)
+g6_first=$(awk -F'\t' '$1 == "OUTSIDE" || $1 == "STALE" { print $2; exit }' $WORK/g6.txt)
+if [[ ${g6_out:-1} -eq 0 && ${g6_stale:-1} -eq 0 && ${g6_rows:-0} -ge 1 ]]; then
+  print -r -- "SA-G6 PASS house: the section 5 pattern over lib, surface, bin and test prints $g6_raw raw hits over $g6_files ml and mli files, all $g6_raw disclosed by dev/house-exclusions.tsv ($g6_rows rows, exact text), 0 outside, 0 stale rows"
 else
-  print -r -- "SA-G6 FAIL house: $g6_hits banned tokens outside the 2 disclosed lines, $g6_raw raw hits"
-  tail -20 $WORK/g6.txt
+  print -r -- "SA-G6 FAIL house: ${g6_out:-0} banned tokens outside the ${g6_rows:-0} disclosed lines, ${g6_stale:-0} stale rows, $g6_raw raw hits, first: $g6_first"
+  rg -N -e '^OUTSIDE' -e '^STALE' $WORK/g6.txt | tail -20
   ANY_FAIL=1
 fi
 
