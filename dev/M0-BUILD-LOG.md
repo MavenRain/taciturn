@@ -683,3 +683,83 @@ The review of this slice returned seven findings.  All seven are applied.
 
 No finding is skipped.  `node dev/reader-tests.mjs` prints READER-TESTS OK
 47/47.
+
+## 2026-09-06 Stage 0 row validation
+
+Continued from committed reader hardening at 32cef49.  The kanon repository
+still ends at Stage J, ac94fe3; PIN remains de40d65.  This slice strengthens
+the independent row spike.  Stage C still waits for the committed Stage K
+re-pin required by D-A-1.
+
+`Row.finish` now returns a typed result and rejects incomplete or duplicate
+bindings, invalid wire ids, changed wire zero and malformed interface counts.
+The count checks subtract from the available wires, so even a positive
+wrapped total cannot pass.  A missing operand read by `mul` or `lin` remains
+an error after a later binding supplies that wire.
+
+`Lower.lower` checks raw circuits independently: wire and interface counts,
+witness length, constant wire, every row wire and the fixed-zero lookup tag.
+`Main.emit` reports `ROWS-FAIL reason=...`, exits 1 and opens neither artifact
+when either boundary rejects.  Structural validation does not establish
+constraint satisfaction or that every input is constrained.  The blind
+reader and proof round trip still check the emitted equations.  The pruning
+comment and emitter comment state that unused interface wires remain present.
+
+Validation on the final code in an isolated checkout:
+
+- `zsh dev/dunecho.sh build`: zero errors and zero warnings.
+- `zsh dev/dune.sh runtest`: all existing suites passed, including the eight
+  lowering regressions.  The new row suite passed 41 structural negatives,
+  delayed binding controls and the mul plus both MiMC-3 baselines.
+- The Node test harness runs the emitter with missing bindings and with a
+  raw unsupported lookup.  Each exits 1 with the diagnostic before creating
+  files, and preserves both existing artifact files on a second invocation.
+  Dune explicitly depends on the test executable passed to Node.
+- `zsh dev/stage-a-gates.sh`: 8/8 PASS, GATES-OK.
+- `zsh dev/stage-b-gates.sh`: 12/12 PASS, GATES-OK.
+- `zsh dev/spike-gates.sh`: 11/11 PASS, GATES-OK.  The snarkjs PLONK round
+  trip passed for mul and MiMC-3.  DIFF remains 12 against circom O2 at 12.
+  The five-run process baseline median is 7.530 ms, below the 20 ms bound.
+- The six r1cs and wtns files for mul and both MiMC-3 vectors match the
+  existing baseline artifacts byte for byte.
+- The mutation checks are recorded in MUTATION-LOG.md.
+
+The row implementation totals 700/700 lines, the field implementation stays
+234/250, and the kernel stays 2987/3000.  No gate, accounting path or bound
+changed.  Changes are staged and uncommitted for the user; no commit is made.
+
+### Review, 2026-09-06
+
+The review of this slice returned seven findings.  All seven are applied.
+
+- builder-1, MEDIUM.  `lin` required an operand under a zero coefficient, so a
+  state that numbers a public output early and binds it after the linear row
+  was rejected with a false missing binding.  `lin` now requires only the
+  operands with a nonzero coefficient, and one accept control in the row suite
+  builds that state and expects a circuit.  `mul` still requires both operands.
+- builder-2, MEDIUM.  `require` reported a missing binding for an operand that
+  was negative, above the wire count or equal to the next wire, and the last of
+  those named a wire that `fresh` binds one line later.  `require` now reports
+  an invalid wire for an operand outside the allocated range, which is the
+  reason the binding path already gives for the same wire id.  The row suite
+  adds `lin-operand-negative` and `mul-operand-unallocated`.
+- lowering-1, MEDIUM.  The check of the three lowering baselines exited 1 with
+  no message.  It now prints the baseline name with the expected and the actual
+  constraint count, and the reordered binding check prints its own line.
+- gates-and-logs-1, MEDIUM.  The state claim above stated changes prepared for
+  staging.  It now states staged changes.
+- builder-3, LOW.  The row wire check inside `Row.finish` had no state case.
+  The row suite adds `row-wire-out-of-range`, which reaches that check through
+  `Row.mul_into` and `Row.finish`.
+- lowering-3, LOW.  The helper added to the lowering regressions printed a row
+  error where the older failure line prints a check name.  It now prints the
+  check name and the row error behind `reason=`.
+- gates-and-logs-2, LOW.  The claim of an independent static review named no
+  artifact in this tree, so the bullet is deleted.
+
+No finding is skipped.  The two count claims above and in MUTATION-LOG.md now
+state 41 rejection cases, which is the number of `ROW-VALIDATE PASS` lines the
+suite prints.  `zsh dev/dunecho.sh build` prints zero errors and zero warnings,
+`zsh dev/dune.sh runtest --force` passes every suite, and the row
+implementation stays at 700/700 lines.  The three gate ladders and the six
+emitted artifacts are rechecked after this review.

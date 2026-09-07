@@ -15,9 +15,15 @@ let accepts (cs : Lower.cst list) (values : Fp.t list) : bool =
       | (None, _, _) | (_, None, _) | (_, _, None) -> false)
     cs
 
+let checked name result =
+  Result.fold ~ok:Fun.id
+    ~error:(fun error ->
+      Printf.eprintf "LOWER FAIL %s reason=%s\n" name (Row.error_string error);
+      exit 1) result
+
 let check name st wire forged =
-  let original = Row.finish st in
-  let c, cs = Lower.prune original (Lower.lower original) in
+  let original = checked name (Row.finish st) in
+  let c, cs = Lower.prune original (checked name (Lower.lower original)) in
   let bad = List.mapi
       (fun w value -> if w = wire then Fp.of_int forged else value) c.witness in
   if accepts cs c.witness && not (accepts cs bad) then

@@ -2,8 +2,8 @@
      rows.exe mul X Y OUT
      rows.exe mimc3 X K OUT
    X, Y and K are decimal.  OUT.r1cs and OUT.wtns are written and exactly
-   one ROWS line is printed.  A usage error prints ROWS-USAGE and exits
-   with status 2. *)
+   one ROWS line is printed.  Usage errors exit 2 with ROWS-USAGE;
+   invalid circuits exit 1 with ROWS-FAIL before either file is opened. *)
 
 (* The round constants of the brief section 4.  They are spike constants,
    picked so that three builders agree on them;  they are not the
@@ -14,14 +14,17 @@ let usage () =
   print_string "ROWS-USAGE\n";
   exit 2
 
-(* L1 lowers the rows, then the pruning pass drops the wires no emitted
-   constraint mentions, so every wire the pair declares is bound by the
-   system and every witness value it holds is checkable.  The wire count
-   printed and written is the pruned one. *)
-let emit (name : string) (out : string) (c : Row.circuit) (h : Fp.t) : unit =
-  let (pc, cs) : Row.circuit * Lower.cst list =
-    Lower.prune c (Lower.lower c)
-  in
+let checked result =
+  Result.fold ~ok:Fun.id ~error:(fun error ->
+      Printf.eprintf "ROWS-FAIL reason=%s\n" (Row.error_string error); exit 1) result
+
+(* L1 validates before lowering; pruning then drops unused internal wires.
+   Interface slots keep their specified order even when unconstrained.
+   Only the validated, pruned circuit reaches either writer. *)
+let emit (name : string) (out : string) (built : (Row.circuit, Row.error) result)
+    (h : Fp.t) : unit =
+  let c = checked built in
+  let pc, cs = Lower.prune c (checked (Lower.lower c)) in
   R1cs.write (String.concat "" [ out; ".r1cs" ]) pc cs;
   Wtns.write (String.concat "" [ out; ".wtns" ]) pc.witness;
   print_string
@@ -33,7 +36,7 @@ let emit (name : string) (out : string) (c : Row.circuit) (h : Fp.t) : unit =
 (* x * y = z, with x and y private and z the public output.  Wire 1 is z,
    wire 2 is x and wire 3 is y, so the one product row lands its result on
    the public output wire itself and L1 emits one constraint. *)
-let build_mul (x : Fp.t) (y : Fp.t) : Row.circuit * Fp.t =
+let build_mul (x : Fp.t) (y : Fp.t) : (Row.circuit, Row.error) result * Fp.t =
   let z = Fp.mul x y in
   let st = Row.init ~n_pub_out:1 ~n_pub_in:0 ~n_priv:2 in
   let st = Row.bind st 1 z in
@@ -66,7 +69,7 @@ let rounds (st : Row.state) (x : Row.wire) (k : Row.wire) :
    itself out of every constraint, as it leaves out the three t_i, and the
    pruning pass of L1 then drops those four wires from the wire count and
    from the witness. *)
-let build_mimc3 (x : Fp.t) (k : Fp.t) : Row.circuit * Fp.t =
+let build_mimc3 (x : Fp.t) (k : Fp.t) : (Row.circuit, Row.error) result * Fp.t =
   let st = Row.init ~n_pub_out:1 ~n_pub_in:1 ~n_priv:1 in
   let st = Row.bind st 2 k in
   let st = Row.bind st 3 x in

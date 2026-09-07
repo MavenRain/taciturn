@@ -1,0 +1,12 @@
+(copy_files ../rows/fp.ml)
+(copy_files ../rows/fp.mli)
+(copy_files ../rows/row.ml)
+(copy_files ../rows/lower.ml)
+(copy_files ../rows/r1cs.ml)
+(copy_files ../rows/wtns.ml)
+(copy_files ../rows/main.ml)
+
+(test
+ (name validation)
+ (deps check.mjs)
+ (action (run node %{dep:check.mjs} %{exe:validation.exe})))

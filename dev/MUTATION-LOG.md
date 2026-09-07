@@ -212,3 +212,32 @@ wire ids.  S0-G5 requires the complete suite to pass.
 A scratch runner deletes each of 17 rejection lines of the reader in turn and
 runs the suite against the copy.  All 17 mutants are killed, the raw magic
 compare and the public output rule included.
+
+## 2026-09-06 Stage 0 row validation
+
+Each mutation ran on an isolated copy under
+`/Users/oobi/Documents/gpt13/row-mutants/NAME`.  Each first passed
+`zsh dev/dunecho.sh build` with zero errors and zero warnings, exit 0.
+The command `node spike/row-tests/check.mjs
+_build/default/spike/row-tests/validation.exe` then exited 1 in each copy.
+The original checkout was not mutated.  Build and test evidence remains in
+each copy's `build.log` and `test.log`.
+
+| Id | NAME and edit | First failing row | Result |
+| --- | --- | --- | --- |
+| S0-RV-M1 | lower-validation: omit `Row.validate` in `Lower.lower` | `zero-wire-count accepted` | KILLED |
+| S0-RV-M2 | lookup-tag: accept nonzero lookup tags | `row-lookup-before-finish accepted` | KILLED |
+| S0-RV-M3 | duplicate-binding: remove the duplicate binding branch | `duplicate-same-value expected=duplicate-binding:1 got=missing-binding:3` | KILLED |
+| S0-RV-M4 | missing-operands: omit operand tracking in `mul` and `lin` | `mul-read-before-bind accepted` | KILLED |
+
+S0-RV-M3 checks the explicit diagnostic contract: other structural guards
+still reject that mutant's duplicate witness.  The other three mutants
+admit the malformed circuit named by their failing test.  The unmodified
+suite passes all 41 rejection cases, its valid controls and the emitter
+checks that neither create nor overwrite artifacts on rejection.
+
+### Review, 2026-09-06
+
+The review of the row validation slice added three rejection cases to the row
+suite, so the count above states 41 and not the 38 of the first run.  No
+mutant copy changed and no row of the table above changed.

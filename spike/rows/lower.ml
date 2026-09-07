@@ -67,21 +67,10 @@ let renumber (m : (int * int) list) (l : lc) : lc =
     (fun (w, v) -> (Option.value (List.assoc_opt w m) ~default:w, v))
     l
 
-(* L1 folds eligible internal definitions into their uses: the three t_i of
-   MiMC-3 and the x_3 the closing row states out of h and k all leave the
-   constraint system.  A wire the constraints never mention is not bound
-   by the system at all, so its witness value could be anything and a
-   reader that checks A * B = C could not see it change.  This pass drops
-   those wires and numbers the survivors from zero, keeping wire 0 and the
-   whole interface (the public outputs, the public inputs and the private
-   inputs) whether or not a constraint mentions them, so snarkjs still
-   reads the wire order it expects.  The map is monotone, so a linear
-   combination stays sorted and keeps one entry per wire.
-
-   The returned circuit carries the interface counts, the surviving wire
-   count and the pruned witness, which is all the two writers read, and no
-   rows: the wire ids inside the rows are the ones from before the pass
-   and the lowering has already consumed them. *)
+(* Consume only a validated circuit and its lowered constraints.  Drop
+   unused internal wires, retaining wire 0 and the interface in snarkjs order.
+   Monotone renumbering preserves sorted, unique terms; erase consumed rows
+   whose old ids no longer describe the pruned witness and counts. *)
 let prune (c : Row.circuit) (cs : cst list) : Row.circuit * cst list =
   let n_iface = 1 + c.c_pub_out + c.c_pub_in + c.c_priv in
   let kept =
@@ -98,9 +87,10 @@ let prune (c : Row.circuit) (cs : cst list) : Row.circuit * cst list =
         { ca = renumber m k.ca; cb = renumber m k.cb; cc = renumber m k.cc })
       cs )
 
-let lower (c : Row.circuit) : cst list =
+let lower (c : Row.circuit) : (cst list, Row.error) result =
+  let* () = Row.validate c in
   let m = defs (1 + c.c_pub_out + c.c_pub_in + c.c_priv) c.crows in
-  List.filter_map
+  Ok (List.filter_map
     (fun (r : row) ->
       let k =
         {
@@ -112,4 +102,4 @@ let lower (c : Row.circuit) : cst list =
         }
       in
       if is_linear r && k.cc = [] then None else Some k)
-    c.crows
+    c.crows)
