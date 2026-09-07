@@ -608,3 +608,78 @@ lib/error.ml line 7 of its copy and SA-G6 prints 1 outside and 1 stale row;  bot
 prints GATES-OK after both runs.  dev/stage-a-gates.sh is a staged Stage A path now AM in porcelain, so the Stage A
 commit from the index carries the Stage A form of the gate and the Stage B commit carries the table form.  SB-B5 is
 waived on the resume with this fix in place.
+
+## Stage 0 reader hardening, 2026-09-06
+
+Baseline: 259de6d, Stage B committed with a clean worktree.  Kanon is at
+ac94fe3, Stage J; Stage K and the D-A-1 re-pin remain prerequisites for
+Stage C.  This change hardens the existing Stage 0 oracle.
+
+The reader previously accepted a private witness value plus the field prime,
+a coefficient plus the prime, duplicate sections, trailing bytes, oversized
+header bodies and inconsistent interface counts.  Reduction during constraint
+evaluation hid the noncanonical field encodings.  Section slicing also
+discarded framing errors before the semantic checks could see them.
+
+The reader now checks section bounds before converting a 64-bit size to a
+JavaScript number, rejects duplicate sections and trailing bytes, requires
+exact header sizes, and checks field elements, wire ids, interface counts and
+label bounds and uniqueness.  Dossier section 1 states no label rule beyond
+one id per wire, so Stage 0 adds a rule of its own: label ids must be
+distinct and below nLabels.  Label counts stay BigInt.  Reordered sections
+and properly framed unknown sections remain accepted.  The reader is 229
+lines against the unchanged 250-line budget.
+
+`node dev/reader-tests.mjs` passes 47/47 independent binary fixture checks.
+The suite creates its own multiplication artifact without invoking the OCaml
+writer, uses temporary files with cleanup, and checks exact rejection reasons.
+S0-G5 runs it alongside the existing witness-flip and coefficient-order mutants.
+Running the suite against the baseline reader gives 20/47: thirteen malformed
+artifacts are wrongly accepted, and fourteen reject with a different reason.
+The existing emitted MiMC-3 (3, 5) artifact still passes the hardened reader.
+
+`zsh dev/spike-gates.sh` passes ten of the 11 gates, including PLONK
+setup, prove and verify for multiplication and MiMC-3.  DIFF reports ours=12,
+circom O0=17, O1=16, O2=12, ratio against O2=1.  No gate is PENDING.
+S0-G11 times /usr/bin/true against a 20 ms median.  It printed FAIL with a
+median of 54.193 ms on a loaded machine, so the run ended GATES-FAIL.  A
+later rerun in a quiet window printed S0-G11 PASS with a median of 11.864 ms,
+so all 11 gates pass and the ladder ends GATES-OK.
+
+Stage B passes 12/12 gates and Stage A passes 8/8, both GATES-OK.  The
+kernel suite reports PARSE-OK 13/13, CHECK-OK 11/11 and NEG-OK 20/20.
+CARRY checks 19 files, the kernel remains 2987/3000 lines, and the interim
+pin remains de40d65.  `git diff --check` passes.  Changes are staged and
+uncommitted for the user.
+
+No cryptographic soundness claim follows from parser validation.  The reader
+remains a BN254 Stage 0 artifact checker, not a general R1CS implementation.
+
+### Review, 2026-09-06
+
+The review of this slice returned seven findings.  All seven are applied.
+
+- L1-1, HIGH.  The reader compared an ascii decoded magic, so a preamble byte
+  with bit 7 set still read as the magic.  The compare is now over the four
+  raw bytes.  The fixture `high bit in magic` sets byte 1 of the r1cs magic
+  to 0xb1; the 0xf4 of the fix note is the high bit form of a wtns byte and
+  the old reader already rejected it in the r1cs magic.
+- L4-2, MEDIUM.  The label rules of the reader are stricter than the dossier.
+  Both checks stay and the paragraph above discloses the added rule.
+- L1-3, MEDIUM.  A header could declare no public output, so the success line
+  could print out=undefined.  The reader now fails with `r1cs-pub-out`.  The
+  fixture sets nPubOut at header offset 40, not the 36 of the fix note.
+- L3-2, MEDIUM.  S0-G5 folded the fixture suite into the two artifact
+  mutants.  The suite now runs before the artifact test, its last line prints
+  in both failure messages, and the headline drops "reader not killed".
+- L1-2, MEDIUM.  The gate claim above stated GATES-OK over all 11 gates.  It
+  now states ten of the 11 and gives the S0-G11 median that ended the run.
+- L3-4, MEDIUM.  The state claim above stated unstaged changes.  It now
+  states staged changes.
+- L4-7, LOW.  Fourteen fixtures cover the magic, the public output rule, the
+  witness count, the constraint count, the label count, the wire 0 label, the
+  two field sizes, the r1cs prime and the five missing sections.  The two
+  cross-file checks in main could never fire and are deleted.
+
+No finding is skipped.  `node dev/reader-tests.mjs` prints READER-TESTS OK
+47/47.

@@ -181,3 +181,34 @@ copy's own dev/stage-a-gates.sh ended `GATES-FAIL` with exit 1.  This is the
 pin of the ruling:  a table row cannot outlive the prose it names.  ROOT ran
 its own dev/stage-a-gates.sh after both mutants and printed GATES-OK, so
 neither copy touched it.
+
+## Stage 0 reader hardening, 2026-09-06
+
+`dev/reader-tests.mjs` constructs a valid multiplication artifact independently
+of the OCaml writer, then changes one binary property per negative case.
+All 47 checks pass with the fixed reader.  The baseline at 259de6d passes
+20/47, including three valid controls and seventeen existing rejection checks.
+
+| Mutation family | Baseline evidence | Fixed result |
+| --- | --- | --- |
+| Private witness plus p | READER OK, exit 0 | wtns-field-range |
+| Constraint coefficient plus p | READER OK, exit 0 | r1cs-c0-A-field-range |
+| Interface count exceeds wire count | READER OK, exit 0 | r1cs-interface-count |
+| Label outside label count or duplicate label | READER OK, exit 0 | label-range or label-duplicate |
+| Extra bytes inside either header | READER OK, exit 0 | header-size |
+| Duplicate section in either container | READER OK, exit 0 | section-duplicate |
+| Trailing bytes in either container | READER OK, exit 0 | trailing-bytes |
+| Magic byte with the high bit set | READER OK, exit 0 | r1cs-magic |
+| Header declares no public output | READER OK, exit 0 | r1cs-pub-out |
+| Truncation, huge section size, invalid wire or LC count | Rejected incidentally | Explicit bounds rejection |
+
+The thirteen false acceptances above all exit 1 after the fix.  The other
+fourteen baseline failures reflect diagnostic improvements, not additional
+false acceptances.  Valid controls include reordered sections and an unknown
+but correctly framed extension section.  Existing negatives cover altered
+witnesses, the constant wire, zero coefficients, and unsorted or duplicate
+wire ids.  S0-G5 requires the complete suite to pass.
+
+A scratch runner deletes each of 17 rejection lines of the reader in turn and
+runs the suite against the copy.  All 17 mutants are killed, the raw magic
+compare and the public output rule included.

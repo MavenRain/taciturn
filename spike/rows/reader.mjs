@@ -29,26 +29,32 @@ function readBigLE(buf, off, len) {
 }
 
 function parseSections(buf, magicStr, expectedVersion, tag) {
-  const magic = buf.toString("ascii", 0, 4);
-  if (magic !== magicStr) fail(`${tag}-magic`);
+  if (buf.length < 12) fail(`${tag}-preamble-size`);
+  if (!buf.subarray(0, 4).equals(Buffer.from(magicStr, "ascii"))) fail(`${tag}-magic`);
   const version = readU32LE(buf, 4);
   if (version !== expectedVersion) fail(`${tag}-version`);
   const nSections = readU32LE(buf, 8);
   let off = 12;
   const sections = new Map();
   for (let i = 0; i < nSections; i += 1) {
+    if (buf.length - off < 12) fail(`${tag}-section-header-size`);
     const type = readU32LE(buf, off);
     off += 4;
-    const size = Number(readU64LE(buf, off));
+    const size64 = readU64LE(buf, off);
     off += 8;
+    if (size64 > BigInt(buf.length - off)) fail(`${tag}-section-size`);
+    const size = Number(size64);
+    if (sections.has(type)) fail(`${tag}-section-duplicate`);
     sections.set(type, buf.subarray(off, off + size));
     off += size;
   }
+  if (off !== buf.length) fail(`${tag}-trailing-bytes`);
   return sections;
 }
 
 function parseR1csHeader(content, tag) {
   if (content === undefined) fail(`${tag}-header-missing`);
+  if (content.length !== 64) fail(`${tag}-header-size`);
   let off = 0;
   const fs = readU32LE(content, off);
   off += 4;
@@ -64,15 +70,19 @@ function parseR1csHeader(content, tag) {
   off += 4;
   const nPrivIn = readU32LE(content, off);
   off += 4;
-  const nLabels = Number(readU64LE(content, off));
+  const nLabels = readU64LE(content, off);
   off += 8;
   const nConstraints = readU32LE(content, off);
+  if (1 + nPubOut + nPubIn + nPrivIn > wireCount) fail(`${tag}-interface-count`);
+  if (nPubOut < 1) fail(`${tag}-pub-out`);
   return { fs, prime, wireCount, nPubOut, nPubIn, nPrivIn, nLabels, nConstraints };
 }
 
-function parseLC(buf, off, fs, label) {
+function parseLC(buf, off, fs, wireCount, label) {
+  if (buf.length - off < 4) fail(`${label}-size`);
   const count = readU32LE(buf, off);
   off += 4;
+  if (count > Math.floor((buf.length - off) / (4 + fs))) fail(`${label}-size`);
   const terms = [];
   let prevWire = -1;
   for (let i = 0; i < count; i += 1) {
@@ -80,6 +90,8 @@ function parseLC(buf, off, fs, label) {
     off += 4;
     const value = readBigLE(buf, off, fs);
     off += fs;
+    if (wireId >= wireCount) fail(`${label}-wire-range`);
+    if (value >= P) fail(`${label}-field-range`);
     if (value === 0n) fail(`${label}-zero-term`);
     if (wireId <= prevWire) fail(`${label}-sort`);
     prevWire = wireId;
@@ -88,14 +100,14 @@ function parseLC(buf, off, fs, label) {
   return [terms, off];
 }
 
-function parseConstraints(content, fs, m, tag) {
+function parseConstraints(content, fs, m, wireCount, tag) {
   if (content === undefined) fail(`${tag}-constraints-missing`);
   let off = 0;
   const constraints = [];
   for (let i = 0; i < m; i += 1) {
-    const [A, off1] = parseLC(content, off, fs, `${tag}-c${i}-A`);
-    const [B, off2] = parseLC(content, off1, fs, `${tag}-c${i}-B`);
-    const [C, off3] = parseLC(content, off2, fs, `${tag}-c${i}-C`);
+    const [A, off1] = parseLC(content, off, fs, wireCount, `${tag}-c${i}-A`);
+    const [B, off2] = parseLC(content, off1, fs, wireCount, `${tag}-c${i}-B`);
+    const [C, off3] = parseLC(content, off2, fs, wireCount, `${tag}-c${i}-C`);
     off = off3;
     constraints.push({ A, B, C });
   }
@@ -103,19 +115,22 @@ function parseConstraints(content, fs, m, tag) {
   return constraints;
 }
 
-function parseLabels(content, wireCount, tag) {
+function parseLabels(content, wireCount, nLabels, tag) {
   if (content === undefined) fail(`${tag}-labels-missing`);
   if (content.length !== wireCount * 8) fail(`${tag}-label-count`);
   const labels = [];
   for (let i = 0; i < wireCount; i += 1) {
     labels.push(readU64LE(content, i * 8));
   }
+  if (labels.some((v) => v >= nLabels)) fail(`${tag}-label-range`);
+  if (new Set(labels).size !== labels.length) fail(`${tag}-label-duplicate`);
   if (labels[0] !== 0n) fail(`${tag}-label-wire0`);
   return labels;
 }
 
 function parseWtnsHeader(content) {
   if (content === undefined) fail("wtns-header-missing");
+  if (content.length !== 40) fail("wtns-header-size");
   let off = 0;
   const n8 = readU32LE(content, off);
   off += 4;
@@ -132,7 +147,9 @@ function parseWtnsValues(content, n8, count) {
   if (content.length !== n8 * count) fail("wtns-value-count");
   const values = [];
   for (let i = 0; i < count; i += 1) {
-    values.push(readBigLE(content, i * n8, n8));
+    const value = readBigLE(content, i * n8, n8);
+    if (value >= P) fail("wtns-field-range");
+    values.push(value);
   }
   return values;
 }
@@ -165,15 +182,13 @@ async function main() {
 
   const r1csSections = parseSections(r1csBuf, "r1cs", 1, "r1cs");
   const header = parseR1csHeader(r1csSections.get(1), "r1cs");
-  const constraints = parseConstraints(r1csSections.get(2), header.fs, header.nConstraints, "r1cs");
+  const constraints = parseConstraints(r1csSections.get(2), header.fs, header.nConstraints, header.wireCount, "r1cs");
   if (constraints.length !== header.nConstraints) fail("r1cs-constraint-count");
-  const labels = parseLabels(r1csSections.get(3), header.wireCount, "r1cs");
+  const labels = parseLabels(r1csSections.get(3), header.wireCount, header.nLabels, "r1cs");
   if (labels.length !== header.wireCount) fail("r1cs-label-count");
 
   const wtnsSections = parseSections(wtnsBuf, "wtns", 2, "wtns");
   const wHeader = parseWtnsHeader(wtnsSections.get(1));
-  if (wHeader.n8 !== header.fs) fail("fs-mismatch");
-  if (wHeader.prime !== header.prime) fail("prime-mismatch");
   if (wHeader.witnessCount !== header.wireCount) fail("witness-count");
 
   const values = parseWtnsValues(wtnsSections.get(2), wHeader.n8, wHeader.witnessCount);

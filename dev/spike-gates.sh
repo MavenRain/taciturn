@@ -146,8 +146,10 @@ else
 fi
 
 # --- S0-G5 READER-NEG ---
+reader_tests=$(node $ROOT/dev/reader-tests.mjs 2>&1)
+reader_tests_status=$?
 if [ ! -f $READER ] || [ ! -f $OUT/mimc3_3_5.r1cs ] || [ ! -f $OUT/mimc3_3_5.wtns ]; then
-  print -r -- "S0-G5 FAIL missing reader.mjs or mimc3_3_5 pair (needs S0-G4 artifacts)"
+  print -r -- "S0-G5 FAIL missing reader.mjs or mimc3_3_5 pair (needs S0-G4 artifacts) tests=${reader_tests##*$'\n'}"
   ANY_FAIL=1
 else
   mut_note=$(/opt/homebrew/bin/python3 -P $ROOT/dev/spike-gates-mutate.py "$OUT/mimc3_3_5.r1cs" "$OUT/mimc3_3_5.wtns" "$OUT/mimc3_3_5.mut.r1cs" "$OUT/mimc3_3_5.mut.wtns" 2>&1)
@@ -161,10 +163,12 @@ else
     neg_r1cs=$(node $READER $OUT/mimc3_3_5.mut.r1cs $OUT/mimc3_3_5.wtns mimc3 3 5 2>&1)
     neg_r1cs_status=$?
     if [ $neg_wtns_status -eq 1 ] && [[ "$neg_wtns" == "READER FAIL"* ]] \
-       && [ $neg_r1cs_status -eq 1 ] && [[ "$neg_r1cs" == "READER FAIL"* ]]; then
-      print -r -- "S0-G5 PASS wtns-flip=$neg_wtns | r1cs-swap=$neg_r1cs"
+       && [ $neg_r1cs_status -eq 1 ] && [[ "$neg_r1cs" == "READER FAIL"* ]] \
+       && [ $reader_tests_status -eq 0 ] && [[ "$reader_tests" == "READER-TESTS OK "* ]]; then
+      print -r -- "S0-G5 PASS wtns-flip=$neg_wtns | r1cs-swap=$neg_r1cs | $reader_tests"
     else
-      print -r -- "S0-G5 FAIL reader not killed: wtns=$neg_wtns (exit=$neg_wtns_status) r1cs=$neg_r1cs (exit=$neg_r1cs_status)"
+      print -r -- "S0-G5 FAIL wtns=$neg_wtns (exit=$neg_wtns_status) r1cs=$neg_r1cs (exit=$neg_r1cs_status) tests=${reader_tests##*$'\n'}"
+      print -r -- "$reader_tests"
       ANY_FAIL=1
     fi
   fi
