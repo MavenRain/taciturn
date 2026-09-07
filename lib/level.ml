@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/level.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/level.ml, delta: this header line only *)
 type t = int
 
 let zero : t = 0

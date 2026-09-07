@@ -1,12 +1,12 @@
 path	line	text
-lib/check.ml	20	(** A bound local stands for itself, so its value is the variable at the
-lib/check.ml	30	(** A let bound local stands for its definition. *)
-lib/check.ml	48	    The sole exception is the declassifier, which [declassify] below
-lib/check.ml	183	    ledger holds for its position, outermost first, and not with the
-lib/check.ml	208	    at no other mode.  The exception is the single name lib/link.ml
-lib/check.ml	298	  d_body : Term.t option;  (** [None] for a postulate *)
-lib/check.ml	361	(** Entry points for one term, for a driver and for the suite. *)
-lib/conv.ml	75	    the checker for its universe.  A type that does not read back is not
+lib/bignum.ml	3	   Signed payloads preserve malformed kernel inputs for Nat validation. *)
+lib/check.ml	21	(** A bound local stands for itself, so its value is the variable at the
+lib/check.ml	31	(** A let bound local stands for its definition. *)
+lib/check.ml	43	    below is the sole exception for a witness-consuming extern result. *)
+lib/check.ml	193	    at no other mode.  The exception is the single name lib/link.ml
+lib/check.ml	324	  d_body : Term.t option;  (** [None] for a postulate *)
+lib/check.ml	383	(** Entry points for one term, for a driver and for the suite. *)
+lib/conv.ml	59	    the checker for its universe.  A type that does not read back is not
 lib/disclosure.ml	54	      d_text = "the equality test of two field values, one for equal and zero for other";
 lib/error.ml	7	    it for a shape that M0 does not admit, and the parser returns it
 lib/error.ml	8	    through [Parse] for a surface word that M0 reserves.
@@ -17,25 +17,38 @@ lib/global.ml	36	    argument SPEC section 3 makes for prims. [Check] additional
 lib/global.ml	46	    can never step into it, exactly as for an [Axiom]. *)
 lib/link.ml	23	    written once, here, so the exception is one named case and never a
 lib/link.ml	65	    walk asks the environment for the extern entry of the head and reads
+lib/order.ml	59	    argument index, and for every call the chain of eliminated
+lib/order.ml	65	    sum of the arguments, one argument position for every member, and
+lib/order.ml	80	    [Rules.as_vpi] for the point shape and names no shape. *)
+lib/order.ml	183	    guard answers [Ok None] for the first (brief 3.3). *)
+lib/order.ml	194	    the calls it admits and answers [None] for a call it refuses. *)
+lib/order.ml	244	               (* Ruling R1 and SI-D5, byte for byte the pin rule at
+lib/order.ml	375	    group, which for the direct case is the definition itself, exactly
+lib/order.ml	389	    answers for every member, so a call into a sibling must decrease at
+lib/order.ml	394	    The answer is [Ok None] for a group that no member calls, which is
+lib/order.ml	396	    certificate of the first fitting position for a guarded group, which
 lib/positivity.ml	4	    field for field, kan-lang-tot-pin/lib/global.ml:45-70.  SG-D14:  the
 lib/pp.ml	2	(** Display-only printer for the kernel term.  Free variables print as
 lib/prim.ml	12	    [reduce] answers the fast path of SB-D4.  It returns [None] for a
-lib/rules.ml	55	      (** readback, so a rule and conversion can ask the checker for the
-lib/rules.ml	337	(** A [let] binder for a partial view inside [beta]:  a view that does
-lib/rules.ml	360	(** The same for an elimination at the left former. *)
-lib/rules.ml	631	    surface/elab.ml builds it for ".1" and ".2" (SB-D38).  A projection
-lib/rules.ml	1006	(** Brief 3.4:  tot's three-part criterion, ported part for part from
-lib/rules.ml	1049	    (SH-D1).  A family the accessor cannot answer for is not a
-lib/rules.ml	1149	                "the constructor %s of %s gives the index %s and the type asks for %s"
-lib/rules.ml	1196	           (Printf.sprintf "the motive is built for %s and the scrutinee is at %s" mn n))
-lib/rules.ml	1419	(** The pack.  Each refusal sits at the field that answers for it
+lib/rules.ml	4	    expected universe for empty collections (SB-D6); eta rules expose both
+lib/rules.ml	47	      (** readback, so a rule and conversion can ask the checker for the
+lib/rules.ml	124	      (** Pack-directed subsingleton criterion for conversion (SH-D1).
+lib/rules.ml	314	    same weak-head check while preserving each rule's diagnostic. *)
+lib/rules.ml	334	(** A [let] binder for a partial view inside [beta]:  a view that does
+lib/rules.ml	357	(** The same for an elimination at the left former. *)
+lib/rules.ml	600	    the domain for the first projection and the fibre at it for the second. *)
+lib/rules.ml	1103	                "the constructor %s of %s gives the index %s and the type asks for %s"
+lib/rules.ml	1148	           (Printf.sprintf "the motive is built for %s and the scrutinee is at %s" mn n))
+lib/rules.ml	1170	    its universe for the large-elimination check. *)
+lib/rules.ml	1331	    branch. Right elimination remains reserved for M2 (SG-D4). *)
+lib/rules.ml	1353	(** The pack.  Each refusal sits at the field that answers for it
 lib/term.ml	11	    [motive] mirrors tot's record field for field,
 lib/term.ml	87	(** M1 Stage G:  the third view, which the mu pack asks for the
-lib/totality.ml	16	    tot's:  it answers no guarded position for a body with no self call,
-lib/totality.ml	17	    and it answers the milestone word for a body that holds one.
-lib/totality.ml	39	    fused, because M0 reads the body for one fact alone:  does a [Global]
-lib/totality.ml	128	    structurally recursive definition.  At M0 it answers [Ok None] for a
-lib/totality.ml	130	    word for a body that holds one (SC-D15).  [globals] and [ty] are the
+lib/term.ml	95	(** Shared exhaustive occurrence walk for structural order and strict
+lib/totality.ml	8	    (kan-lang-tot-pin/lib/totality.ml:188) part for part.  This file
+lib/totality.ml	11	    name ty body] answers [Ok (Some k)] for a body whose every
+lib/totality.ml	12	    recursive call decreases at formal position [k], [Ok None] for a
+lib/totality.ml	120	    [globals] stands in this signature for the reason it stands in
 surface/elab.ml	2	    from kanon de40d65 surface/elab.ml, not byte for byte, so this file
 surface/elab.ml	3	    holds no carry header and dev/CARRIED.md wants no row for it;  the
 surface/elab.ml	17	    no kernel constructor at M0;  Stage C reads it for the two

@@ -1,26 +1,10 @@
-(* carried from kanon de40d65 lib/conv.ml, delta: this header line and spine argument types read from the actual head *)
-(** Typed conversion, plan section 5.  Three steps in one fixed order.
-
-    Step one is proof irrelevance:  when the type of the type is the
-    proposition universe, any two inhabitants convert.  A universe is
-    never a proposition, because the type of [Univ l] is [Univ (l + 1)]
-    and a successor is not zero, so this step cannot swallow a type
-    comparison.
-
-    Step two is eta by the type.  The type decides the rule, not the two
-    values, so an eta rule fires on a neutral as readily as on a
-    canonical value.  The rule itself comes from the pack of the shape,
-    so this file names no shape.
-
-    Step three is structural.  Both sides are already in weak head normal
-    form, so the comparison reads the head:  a universe by level, a
-    former by shape and diagram, an injection by address and arguments, a
-    section by legs, and a neutral by head and spine.  A spine argument
-    is compared at the type the head's type gives it, which is what
-    carries proof irrelevance into an argument position.
-
-    Conversion holds no state.  It reads the checker through the [ops]
-    record of rules.ml, so lib/ holds no cell of state (SB-D12). *)
+(* carried from kanon c418062 lib/conv.ml, delta: actual-head spine domains and compacted comments *)
+(** Pure typed conversion tries proof irrelevance, type-directed eta,
+    then weak-head structural comparison. Universes cannot qualify for
+    proof irrelevance, since their types have successor levels. Eta comes
+    from rule packs and applies to neutral and canonical values alike.
+    Spine argument types come from the actual head, so forged syntax
+    cannot turn runtime data comparisons into proof comparisons. *)
 
 let ( let* ) = Result.bind
 
@@ -83,9 +67,9 @@ and is_prop (ops : 'c Rules.ops) (ctx : 'c) (ty : Value.t) : bool =
   |> Option.fold ~none:false ~some:(fun (l : Level.t) -> Level.equal l Level.zero)
 
 (** M1 Stage H, brief 3.5:  the second half of step one, named rule 2 of
-    SPEC.md section 5.  Any two inhabitants of a family that passes the
-    criterion of brief 3.4 convert, which is what admits an elimination
-    out of a proposition into a motive above it (M1-PLAN.md:86).  The
+    SPEC.md section 5.  The pack restricts this comparison to Prop
+    families that pass the criterion of brief 3.4.  Erased fields alone
+    do not make inhabitants of a Type family definitionally equal.  The
     criterion is read through the pack, so this file holds no shape name
     and no family lookup of its own (SH-D1).  A shape whose pack cannot
     answer weakens the comparison to the other steps and never
@@ -283,35 +267,28 @@ and conv_addr (ops : 'c Rules.ops) (ctx : 'c) (arg_ty : Value.t option)
 
 and conv_list (ops : 'c Rules.ops) (ctx : 'c) (xs : Value.t list) (ys : Value.t list) :
     (bool, Error.t) result =
-  match (xs, ys) with
-  | [], [] -> Ok true
-  | x :: r1, y :: r2 ->
-      let* eq = conv_type ops ctx x y in
-      if eq then conv_list ops ctx r1 r2 else Ok false
-  | [], _y :: _ -> Ok false
-  | _x :: _, [] -> Ok false
+  Rules.payload_eq (conv_type ops ctx) xs ys
 
 and conv_legs (ops : 'c Rules.ops) (ctx : 'c) (xs : Value.vleg list)
     (ys : Value.vleg list) : (bool, Error.t) result =
-  match (xs, ys) with
-  | [], [] -> Ok true
-  | x :: r1, y :: r2 ->
-      let arity : int = List.length x.Value.vl_binders in
-      let size : int = ops.Rules.o_size ctx in
-      let fresh : Value.t list =
-        List.init arity (fun (i : int) -> Value.var (size + arity - 1 - i))
-      in
-      let ev : Rules.evaluator = ops.Rules.o_ev ctx in
-      let* v1 = Rules.open_closure ev x.Value.vl_clo (List.rev fresh) in
-      let* v2 = Rules.open_closure ev y.Value.vl_clo (List.rev fresh) in
-      let* eq =
-        match () with
-        | () when not (Int.equal arity (List.length y.Value.vl_binders)) -> Ok false
-        | () -> conv_type ops (grow ops ctx arity) v1 v2
-      in
-      if eq then conv_legs ops ctx r1 r2 else Ok false
-  | [], _y :: _ -> Ok false
-  | _x :: _, [] -> Ok false
+  Rules.payload_eq
+    (fun (x : Value.vleg) (y : Value.vleg) ->
+      conv_closures ops ctx (List.length x.Value.vl_binders) x.Value.vl_clo
+        (List.length y.Value.vl_binders) y.Value.vl_clo)
+    xs ys
+
+(** Both semantic legs and frozen branches open in declaration order
+    under the same fresh variables and compare in the grown context. *)
+and conv_closures (ops : 'c Rules.ops) (ctx : 'c) (arity : int) (x : Value.closure)
+    (other_arity : int) (y : Value.closure) : (bool, Error.t) result =
+  if not (Int.equal arity other_arity) then Ok false
+  else
+    let size = ops.Rules.o_size ctx in
+    let fresh = List.init arity (fun i -> Value.var (size + arity - 1 - i)) in
+    let ev = ops.Rules.o_ev ctx in
+    let* v1 = ev.Rules.ev_eval (fresh @ x.Value.env) x.Value.body in
+    let* v2 = ev.Rules.ev_eval (fresh @ y.Value.env) y.Value.body in
+    conv_type ops (grow ops ctx arity) v1 v2
 
 (** Two frozen eliminations, tot's [conv_stuck_match]
     (kan-lang-tot-pin/lib/eval.ml:401) with the address of a branch in
@@ -360,28 +337,15 @@ and conv_motive (ops : 'c Rules.ops) (ctx : 'c) (m1 : Value.stuck_elim)
 and conv_branches (ops : 'c Rules.ops) (ctx : 'c) (env1 : Value.t list)
     (env2 : Value.t list) (bs1 : (Term.addr * Term.leg) list)
     (bs2 : (Term.addr * Term.leg) list) : (bool, Error.t) result =
-  match (bs1, bs2) with
-  | [], [] -> Ok true
-  | (a1, l1) :: r1, (a2, l2) :: r2 ->
-      let arity : int = List.length l1.Term.l_binders in
-      let size : int = ops.Rules.o_size ctx in
-      let fresh : Value.t list =
-        List.init arity (fun (i : int) -> Value.var (size + arity - 1 - i))
-      in
-      let ev : Rules.evaluator = ops.Rules.o_ev ctx in
+  Rules.payload_eq
+    (fun (a1, l1) (a2, l2) ->
       let* addr = branch_addr ops ctx env1 env2 a1 a2 in
-      let* eq =
-        match () with
-        | () when not addr -> Ok false
-        | () when not (Int.equal arity (List.length l2.Term.l_binders)) -> Ok false
-        | () ->
-            let* v1 = ev.Rules.ev_eval (fresh @ env1) l1.Term.l_body in
-            let* v2 = ev.Rules.ev_eval (fresh @ env2) l2.Term.l_body in
-            conv_type ops (grow ops ctx arity) v1 v2
-      in
-      if eq then conv_branches ops ctx env1 env2 r1 r2 else Ok false
-  | [], _b :: _ -> Ok false
-  | _b :: _, [] -> Ok false
+      if not addr then Ok false
+      else
+        conv_closures ops ctx (List.length l1.Term.l_binders)
+          { Value.env = env1; body = l1.Term.l_body }
+          (List.length l2.Term.l_binders) { Value.env = env2; body = l2.Term.l_body })
+    bs1 bs2
 
 (** A branch address is a term, so it is compared under the environment
     the elimination froze. *)

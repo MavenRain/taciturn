@@ -31,10 +31,16 @@ let rec index_of (x : string) (names : string list) : int option =
   | y :: rest ->
       if String.equal x y then Some 0 else Option.map succ (index_of x rest)
 
-(* kanon de40d65 surface/elab.ml:61-67:  "Type n" lives one universe
-   above the level it names, and lib/level.ml counts from zero. *)
-let rec level_of_int (n : int) : Level.t =
-  if n <= 0 then Level.zero else Level.succ (level_of_int (n - 1))
+(* kanon c418062 surface/elab.ml:61-64, sharing the parser's structural
+   bound and reserving both the surface offset and the checker successor. *)
+let level_of_int (n : int) : (Level.t, Error.t) result =
+  let invalid = Error.Universe "surface universe level is outside the supported range" in
+  let* bounded =
+    Parser.bounded_nat Lexer.start (Bignum.of_int n)
+    |> Result.map_error (fun (_e : Error.t) -> invalid)
+  in
+  if bounded >= Stdlib.max_int - 1 then Error invalid
+  else Level.of_int (bounded + 1) |> Option.to_result ~none:invalid
 
 (* kanon de40d65 surface/elab.ml:43-53 *)
 let globals_of (c : Check.ctx) : Global.t = c.Check.globals
@@ -57,7 +63,7 @@ let rec elab (c : Check.ctx) (s : Parser.t) : (Term.t, Error.t) result =
            ~some:(fun (ix : int) -> Ok (Term.Var ix))
   | Parser.SNat n -> Ok (Term.Lit (Literal.LInt n))
   | Parser.SProp -> Ok (Term.Univ Level.zero)
-  | Parser.SType n -> Ok (Term.Univ (level_of_int (n + 1)))
+  | Parser.SType n -> level_of_int n |> Result.map (fun l -> Term.Univ l)
   | Parser.SUnit -> Ok Rules.unit_val
   | Parser.SAuto -> Ok Term.Auto
   | Parser.SApp (f, a) -> elab_app c f a

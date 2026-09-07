@@ -1,8 +1,9 @@
-(* carried from kanon de40d65 lib/check.ml, delta: this header line, the D-B-2 drop of the M1 family declaration path of 190 lines, which M0 does not read, the Builder 2 sites of brief 3.5, domain-directed extern argument checking, duplicate global rejection, normalized postulate linking, and compacted introductory comments *)
-(** Bidirectional checking over the rule packs of the declared shapes.
-    Sections, injections and motive-free eliminations need an expected type.
-    Quantities are modes here; [Usage.body] checks the per-binder sums.
-    Every inference polls the supplied budget. *)
+(* carried from kanon c418062 lib/check.ml, delta: W and Extern checking, split linear modes, duplicate global rejection, normalized linking, D-B-2 family declaration drop, and compacted comments *)
+(** Bidirectional checking delegates shape rules to their packs. Sections,
+    injections and motive-free eliminations need an expected type.
+    Inference polls the supplied budget. Each checked expression carries
+    pure path usage, discharged at One binder boundaries. Types contribute
+    no runtime usage; witness readability and multiplicity remain separate. *)
 
 let ( let* ) = Result.bind
 
@@ -37,16 +38,9 @@ let string_word : string = "string types arrive at M1"
 let no_infer (what : string) : Error.t =
   Error.Cannot_infer (what ^ " has no type of its own;  it needs an expected type")
 
-(** SB-M1:  the occurrence rule of the Stage B brief section 4, which is
-    NORMATIVE, and this is its one site.  No occurrence of a W-marked
-    binder may sit at a One-stamped or a Many-stamped point.  As a total
-    function of the pair (mode, mark), with mode the point and mark the
-    binder:  at mode Zero every mark reads, because a Zero point exists
-    at check time only;  at mode W the marks W, One and Many read and
-    Zero does not;  at mode One and at mode Many the marks One and Many
-    read, and Zero and W do not.  Twelve named pairs and no wildcard.
-    The sole exception is the declassifier, which [declassify] below
-    names once. *)
+(** SB-M1 occurrence rule: Zero reads every binder; W reads every
+    nonzero binder; One and Many read only One and Many. The declassifier
+    below is the sole exception for a witness-consuming extern result. *)
 let readable (mode : Quantity.t) (q : Quantity.t) : bool =
   match (mode, q) with
   | Quantity.Zero, Quantity.Zero -> true
@@ -67,10 +61,28 @@ let names_of (c : ctx) : string list =
     (fun ((x : string), (_q : Quantity.t), (_ty : Value.t)) -> x)
     c.locals
 
+(** Levels identify binders independently of spelling and shadowing.
+    Unreachable eliminations have no returning runtime path to discharge. *)
+let close ?(affine : bool = false) (c : ctx) (size : int) (mode : Linear.mode) (uses : Linear.usage) :
+    (Linear.usage, Error.t) result =
+  List.fold_left
+    (fun acc (level, (name, q, _ty)) ->
+      let* free = acc in
+      if level < size then Ok free
+      else if not (Linear.erased mode) && Quantity.equal q Quantity.One
+              && not ((if affine then Linear.at_most_once else Linear.exactly_once) level free) then
+        let message = if affine then "the linear alias " ^ name ^ " may be used at most once"
+          else "the linear binder " ^ name ^ " must be used exactly once on every runtime path" in
+        Error (Error.Usage message)
+      else Ok (Linear.remove level free))
+    (Ok uses) (List.mapi (fun ix local -> c.size - ix - 1, local) c.locals)
+
 let rec ops : ctx Rules.ops =
   {
-    Rules.o_infer = (fun (c : ctx) (q : Quantity.t) (t : Term.t) -> infer c q t);
-    o_check = (fun (c : ctx) (q : Quantity.t) (t : Term.t) (ty : Value.t) -> check c q t ty);
+    Rules.o_infer = (fun (c : ctx) (q : Linear.mode) (t : Term.t) -> infer_uses c q t);
+    o_check = (fun (c : ctx) (q : Linear.mode) (t : Term.t) (ty : Value.t) -> check_uses c q t ty);
+    o_close = (fun c size mode uses -> close c size mode uses);
+    o_argument = (fun c mode head q arg dom -> extern_point c mode head q arg dom);
     o_infer_univ = (fun (c : ctx) (t : Term.t) -> infer_univ c t);
     o_conv = (fun (c : ctx) ~(ty : Value.t) (a : Value.t) (b : Value.t) -> Conv.conv ops c ~ty a b);
     o_conv_type = (fun (c : ctx) (a : Value.t) (b : Value.t) -> Conv.conv_type ops c a b);
@@ -112,7 +124,7 @@ and head_ty (c : ctx) (h : Value.head) : (Value.t, Error.t) result =
 (** The universe a term lives at.  A type is read at mode [Zero], so an
     erased local may appear in it. *)
 and infer_univ (c : ctx) (t : Term.t) : (Level.t, Error.t) result =
-  let* v = infer c Quantity.Zero t in
+  let* v, _uses = infer_uses c (Linear.mode Quantity.Zero) t in
   let* w = Eval.whnf c.globals v in
   Value.as_univ w
   |> Option.to_result
@@ -120,11 +132,11 @@ and infer_univ (c : ctx) (t : Term.t) : (Level.t, Error.t) result =
          (Error.Universe
             ("a term used as a type is not a universe:  " ^ pp_value c w))
 
-and infer (c : ctx) (mode : Quantity.t) (t : Term.t) : (Value.t, Error.t) result =
+and infer_uses (c : ctx) (mode : Linear.mode) (t : Term.t) : (Value.t * Linear.usage, Error.t) result =
   if Budget.exhausted c.budget then Error (Error.Budget_exhausted budget_msg)
   else infer_node c mode t
 
-and infer_node (c : ctx) (mode : Quantity.t) (t : Term.t) : (Value.t, Error.t) result =
+and infer_node (c : ctx) (mode : Linear.mode) (t : Term.t) : (Value.t * Linear.usage, Error.t) result =
   match t with
   | Term.Var ix ->
       let* x, q, ty =
@@ -134,73 +146,46 @@ and infer_node (c : ctx) (mode : Quantity.t) (t : Term.t) : (Value.t, Error.t) r
                (Error.Unbound
                   (Printf.sprintf "de Bruijn index %d is outside the context" ix))
       in
-      if readable mode q then Ok ty
+      if readable mode.Linear.stamp q then Ok (ty, Linear.occurrence (c.size - ix - 1) mode)
       else
         Error
           (Error.Quantity
-             (Printf.sprintf
-                "the binder %s is marked %s and the point is stamped %s, so the \
-                 occurrence rule of SPEC.md section 3.1 does not read it there"
-                x (Quantity.to_string q) (Quantity.to_string mode)))
-  | Term.Univ l -> Ok (Value.VUniv (Level.succ l))
+             (Printf.sprintf "the binder %s is marked %s and the point is stamped %s, so the occurrence rule of SPEC.md section 3.1 does not read it there" x (Quantity.to_string q) (Quantity.to_string mode.Linear.stamp)))
+  | Term.Univ l -> Ok (Value.VUniv (Level.succ l), Linear.empty)
   | Term.Lan (s, diagram) ->
       let* (pack : ctx Rules.rule_pack) = Rules.rules s in
       let* l = pack.Rules.form_lan ops c s diagram ~expected:None in
-      Ok (Value.VUniv l)
+      Ok (Value.VUniv l, Linear.empty)
   | Term.Ran (s, diagram) ->
       let* (pack : ctx Rules.rule_pack) = Rules.rules s in
       let* l = pack.Rules.form_ran ops c s diagram ~expected:None in
-      Ok (Value.VUniv l)
+      Ok (Value.VUniv l, Linear.empty)
   | Term.Out (s, addr, scrut) ->
-      let* () = extern_point c mode addr scrut in
       let* (pack : ctx Rules.rule_pack) = Rules.rules s in
       pack.Rules.elim_out ops c mode s addr scrut
   | Term.Elim e ->
       let* (pack : ctx Rules.rule_pack) = Rules.rules e.Term.e_shape in
       pack.Rules.elim_elim ops c mode e ~expected:None
   | Term.Let (x, ty, def, body) ->
-      let* c' = let_ctx c mode x ty def in
-      infer c' mode body
+      let_body c mode x ty def (fun c' -> infer_uses c' mode body)
   | Term.Ann (tm, ty) ->
       let* _l = infer_univ c ty in
       let* tyv = Eval.eval c.globals c.env ty in
-      let* () = check c mode tm tyv in
-      Ok tyv
+      let* uses = check_uses c mode tm tyv in
+      Ok (tyv, uses)
   | Term.Global n ->
-      let* () = declassify c mode n in
-      Global.find n c.globals
-      |> Option.to_result ~none:(Error.Unbound n)
-      |> Fun.flip Result.bind (fun (e : Global.entry) ->
-             Eval.eval c.globals [] (Global.entry_ty e))
-  | Term.Lit (Literal.LInt _) -> Eval.eval c.globals [] Prim.nat_ty
+      let* () = declassify c mode.Linear.stamp n in
+      let* ty = head_ty c (Value.HGlobal n) in
+      Ok (ty, Linear.empty)
+  | Term.Lit (Literal.LInt value) ->
+      if Bignum.sign value < 0 then Error (Error.Mismatch "a Nat literal must be nonnegative")
+      else
+        let* ty = Eval.eval c.globals [] Prim.nat_ty in
+        Ok (ty, Linear.empty)
   | Term.Lit (Literal.LString _) -> Error (Error.Not_yet string_word)
   | Term.In (_, _, _) -> Error (no_infer "an injection")
   | Term.Sec (_, _) -> Error (no_infer "a section")
   | Term.Auto -> Error (Error.Not_yet Rules.auto_word)
-
-(** SB-M2:  the Extern signature of the brief section 4, at every call.
-    The argument of a point is stamped with the mark the disclosure
-    ledger holds for its position, outermost first, and not with the
-    binder mark the file wrote, so a witness argument that the file
-    marks w but the ledger stamps One or Many is refused by the
-    occurrence rule above with no second mechanism.  A head that carries
-    no disclosed signature, or a position past the signature, leaves the
-    rule of the point shape standing alone. *)
-and extern_point (c : ctx) (mode : Quantity.t) (addr : Term.addr) (scrut : Term.t) :
-    (unit, Error.t) result =
-  Option.bind (Term.as_apt addr)
-    (fun ((_q : Quantity.t), (arg : Term.t)) ->
-      Link.arg_mark c.globals scrut
-      |> Option.map (fun (mark : Quantity.t) -> (arg, mark)))
-  |> Option.fold ~none:(Ok ())
-       ~some:(fun ((arg : Term.t), (mark : Quantity.t)) ->
-         let* head_ty = infer c mode scrut in
-         let* w = Eval.whnf c.globals head_ty in
-         let* _q, _x, dom =
-           Option.bind (Value.as_ran w) (fun (s, _clo, _u) -> Rules.as_vpi s)
-           |> Option.to_result ~none:(Error.Mismatch "the head of an application is not a function")
-         in
-         check c (Quantity.mul mode mark) arg dom)
 
 (** SB-M3:  prove is the one declassifier of the brief section 4.  An
     extern whose disclosed signature takes a witness argument computes on
@@ -214,8 +199,27 @@ and declassify (c : ctx) (mode : Quantity.t) (n : string) : (unit, Error.t) resu
   | () when String.equal n Link.declassifier -> Ok ()
   | () -> Error (Link.not_a_declassifier n)
 
-and check (c : ctx) (mode : Quantity.t) (t : Term.t) (expected : Value.t) :
-    (unit, Error.t) result =
+(** The ledger supplies the operational demand. A differing declaration
+    still validates at its own stamp, but that view contributes no second
+    usage. Both checks receive the domain, including check-only terms. *)
+and extern_point (c : ctx) (mode : Linear.mode) (head : Term.t) (q : Quantity.t)
+    (arg : Term.t) (dom : Value.t) : (Linear.usage, Error.t) result =
+  let check_argument =
+    Link.arg_mark c.globals head
+    |> Option.fold
+         ~none:(fun () -> check_uses c (Linear.multiply mode q) arg dom)
+         ~some:(fun mark () ->
+           let* uses = check_uses c (Linear.multiply mode mark) arg dom in
+           let* () =
+             if Quantity.equal mark q then Ok ()
+             else Result.map (fun _uses -> ()) (check_uses c (Linear.multiply mode q) arg dom)
+           in
+           Ok uses)
+  in
+  check_argument ()
+
+and check_uses (c : ctx) (mode : Linear.mode) (t : Term.t) (expected : Value.t) :
+    (Linear.usage, Error.t) result =
   match t with
   | Term.Sec (s, legs) ->
       let* (pack : ctx Rules.rule_pack) = Rules.rules s in
@@ -225,17 +229,21 @@ and check (c : ctx) (mode : Quantity.t) (t : Term.t) (expected : Value.t) :
       pack.Rules.intro_in ops c mode s addr args ~expected
   | Term.Elim e ->
       let* (pack : ctx Rules.rule_pack) = Rules.rules e.Term.e_shape in
-      let* got = pack.Rules.elim_elim ops c mode e ~expected:(Some expected) in
-      ensure c got expected
-  | Term.Lan (s, diagram) -> check_former c s diagram expected ~left:true
-  | Term.Ran (s, diagram) -> check_former c s diagram expected ~left:false
+      let* got, uses = pack.Rules.elim_elim ops c mode e ~expected:(Some expected) in
+      let* () = ensure c got expected in
+      Ok uses
+  | Term.Lan (s, diagram) ->
+      Result.map (fun () -> Linear.empty) (check_former c s diagram expected ~left:true)
+  | Term.Ran (s, diagram) ->
+      Result.map (fun () -> Linear.empty) (check_former c s diagram expected ~left:false)
   | Term.Let (x, ty, def, body) ->
-      let* c' = let_ctx c mode x ty def in
-      check c' mode body expected
+      Result.map snd (let_body c mode x ty def (fun c' ->
+        let* uses = check_uses c' mode body expected in Ok (expected, uses)))
   | Term.Var _ | Term.Univ _ | Term.Out (_, _, _) | Term.Ann (_, _) | Term.Global _
   | Term.Lit _ | Term.Auto ->
-      let* got = infer c mode t in
-      ensure c got expected
+      let* got, uses = infer_uses c mode t in
+      let* () = ensure c got expected in
+      Ok uses
 
 (** A former checked against a universe passes the expected level to the
     pack (SB-D6), which is what gives the width zero collection its
@@ -274,16 +282,34 @@ and ensure (c : ctx) (got : Value.t) (expected : Value.t) : (unit, Error.t) resu
          (Printf.sprintf "the term has type %s and the expected type is %s"
             (pp_value c got) (pp_value c expected)))
 
-(** A let binds its definition, so the body sees the value and not only
-    the name.  The local carries the mode the let was read at, so an
-    erased let stays erased in its body. *)
-and let_ctx (c : ctx) (mode : Quantity.t) (x : string) (ty : Term.t) (def : Term.t) :
-    (ctx, Error.t) result =
+(** Eager definitions count once. An implicit alias carrying a linear
+    resource is affine: its own reads may be zero or one, never duplicated. *)
+and let_body (c : ctx) (mode : Linear.mode) (x : string) (ty : Term.t) (def : Term.t)
+    (body : ctx -> (Value.t * Linear.usage, Error.t) result) :
+    (Value.t * Linear.usage, Error.t) result =
   let* _l = infer_univ c ty in
   let* tyv = Eval.eval c.globals c.env ty in
-  let* () = check c mode def tyv in
+  let* def_uses = check_uses c (Linear.runtime mode) def tyv in
   let* defv = Eval.eval c.globals c.env def in
-  Ok (define x mode tyv defv c)
+  let linear = List.exists (fun (ix, (_name, q, _ty)) ->
+    Quantity.equal q Quantity.One && Linear.used (c.size - ix - 1) def_uses)
+    (List.mapi (fun ix local -> ix, local) c.locals) in
+  let q = match () with
+    | () when Linear.erased mode -> Quantity.Zero
+    | () when linear -> Quantity.One
+    | () when Quantity.equal mode.Linear.stamp Quantity.W -> Quantity.W
+    | () -> Quantity.Many in
+  let c' = define x q tyv defv c in
+  let* result, uses = body c' in
+  let* free = close ~affine:linear c' c.size mode uses in
+  Ok (result, Linear.sequence (Linear.scale mode def_uses) free)
+
+let infer (c : ctx) (mode : Quantity.t) (t : Term.t) : (Value.t, Error.t) result =
+  Result.map fst (infer_uses c (Linear.mode mode) t)
+
+let check (c : ctx) (mode : Quantity.t) (t : Term.t) (expected : Value.t) :
+    (unit, Error.t) result =
+  Result.map (fun _uses -> ()) (check_uses c (Linear.mode mode) t expected)
 
 (** The two kinds of declaration M0 has.  A definition carries a body, an
     axiom does not (R-Q3). *)
@@ -327,10 +353,6 @@ let check_decl (globals : Global.t) (budget : Budget.t) (d : decl) :
         d.d_body |> Option.to_result ~none:(missing_body d.d_name)
       in
       let* () = check c Quantity.Many body tyv in
-      (* brief 3.5:  the sum of SPEC.md section 3.2 rides beside the
-         occurrence rule as a well-formedness check, with its own error
-         constructor (lib/usage.ml). *)
-      let* () = Usage.body body in
       (* SB-D24:  M0 has no recursion, so unfolding ends and every
          definition is reducible with no guarded argument. *)
       Ok

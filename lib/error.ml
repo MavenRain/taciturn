@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/error.ml, delta: this header line, the two extern arms Extern_signature and Extern_undisclosed of Stage B, brief 3.3, and the two Builder 2 arms Usage of the sum of SPEC.md section 3.2 and Extern_clash of the ledger name clash, brief 3.5 *)
+(* carried from kanon c418062 lib/error.ml, delta: this header line, the two extern arms Extern_signature and Extern_undisclosed of Stage B, brief 3.3, and the two Builder 2 arms Usage of the sum of SPEC.md section 3.2 and Extern_clash of the ledger name clash, brief 3.5 *)
 (** Kernel and surface errors.  Stage B extends this sum with the check
     errors;  every consumer matches it exhaustively, so a new arm is a
     compile error at every reader before it is a silent fallthrough.
@@ -25,7 +25,7 @@ type t =
   | Quantity of string  (** an erased binder is read in a runtime position *)
   | Wrong_leg of string  (** a leg address is outside the collection *)
   | Missing_branch of string  (** an elimination does not cover every address *)
-  | Overflow of string  (** a check-time literal leaves the host int range *)
+  | Overflow of string  (** a structural index leaves the host int range *)
   | Cannot_infer of string  (** the term has no type without an expectation *)
   | Budget_exhausted of string  (** the driver's cutoff fired (SB-D19) *)
   | Index_not_zero of string
@@ -53,6 +53,12 @@ type t =
       (** M0 Stage B, brief 3.5:  a definition carries the name of a row
           in the disclosure ledger, so the file would define a name the
           ledger declares as believed or as foreign *)
+  | Termination of string
+      (** The structural recursion guard rejected the named definition. *)
+
+(* kanon c418062 lib/error.ml:46, the shared termination diagnostic. *)
+let termination_msg (n : string) : string =
+  Printf.sprintf "recursive definition %s failed the structural termination guard" n
 
 let message (e : t) : string =
   match e with
@@ -74,6 +80,7 @@ let message (e : t) : string =
   | Extern_undisclosed m -> m
   | Usage m -> m
   | Extern_clash m -> m
+  | Termination n -> termination_msg n
 
 let to_string (e : t) : string =
   match e with
@@ -95,3 +102,4 @@ let to_string (e : t) : string =
   | Extern_undisclosed m -> "extern undisclosed: " ^ m
   | Usage m -> "usage: " ^ m
   | Extern_clash m -> "extern clash: " ^ m
+  | Termination n -> "termination: " ^ termination_msg n

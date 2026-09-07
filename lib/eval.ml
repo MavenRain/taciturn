@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/eval.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/eval.ml, delta: this header line *)
 (** Normalization by evaluation, plan section 5.  The evaluator is tot's
     (kan-lang-tot-pin/lib/eval.ml:46) rewritten arm by arm over the
     thirteen constructors of term.ml, and the readback is tot's
@@ -10,9 +10,8 @@
     no substitution ever walks a term.
 
     The evaluator is call by value, so every value it returns is already
-    in weak head normal form.  [whnf] is therefore the literal fast path
-    alone (SB-D4):  a saturated primitive on natural literals answers,
-    and every other application stays on the spine.
+    in weak head normal form.  [whnf] handles literal primitives and
+    recursive globals whose guarded argument is a constructor.
 
     No shape name appears in this file (gate leg R0-AUDIT).  Elimination
     goes through [Rules.out_value] and [Rules.elim_value], which read the
@@ -51,7 +50,7 @@ let rec eval (globals : Global.t) (env : Value.t list) (tm : Term.t) :
       let* va = eval_addr globals env addr in
       let* v = eval globals env scrut in
       let* applied = Rules.out_value (ev globals) vs va v in
-      prim_step globals applied
+      whnf globals applied
   | Term.Elim e ->
       let* vs = Rules.map_shape (eval globals env) e.Term.e_shape in
       let* v = eval globals env e.Term.e_scrut in
@@ -90,7 +89,9 @@ and eval_global (globals : Global.t) (n : string) : (Value.t, Error.t) result =
   |> Fun.flip Result.bind (fun (e : Global.entry) ->
          Global.def_of e
          |> Option.fold ~none:(Ok opaque) ~some:(fun (d : Global.def_entry) ->
-                if d.Global.reducible then eval globals [] d.Global.def else Ok opaque))
+                if d.Global.reducible && Option.is_none d.Global.rec_arg then
+                  eval globals [] d.Global.def
+                else Ok opaque))
 
 (** SB-D7:  an annotation whose type is a universe fills the level slot
     of a former, so the width zero collection at [Univ zero] and the same
@@ -160,11 +161,52 @@ and spine_literals (sp : Value.spine list) : Literal.t list option =
           | Value.SElim _ -> None))
     (Some []) sp
 
-(** Weak head normal form.  Evaluation is call by value, so the value is
-    already in weak head normal form and the fast path is the only step
-    that can still fire on it. *)
+(** Guarded unfolding mirrors tot's apply/replay (lib/eval.ml:139-177).
+    Only leading point applications count toward the formal position.
+    A bare, partial or neutral recursive argument leaves the head frozen. *)
 and whnf (globals : Global.t) (v : Value.t) : (Value.t, Error.t) result =
-  prim_step globals v
+  let* v = prim_step globals v in
+  let candidate =
+    Value.as_neutral v |> Fun.flip Option.bind (fun (h, sp) ->
+        match h with
+        | Value.HLocal _ -> None
+        | Value.HGlobal n ->
+            Global.find n globals |> Fun.flip Option.bind Global.def_of
+            |> Fun.flip Option.bind (fun (d : Global.def_entry) ->
+                if d.Global.reducible then
+                  Option.map (fun (k : int) -> (d.Global.def, k, List.rev sp)) d.Global.rec_arg
+                else None))
+  in
+  candidate |> Option.fold ~none:(Ok v) ~some:(fun (body, k, frames) ->
+      if guarded_frame k frames then
+        let* head = eval globals [] body in
+        replay globals head frames
+      else Ok v)
+
+and guarded_frame (k : int) (frames : Value.spine list) : bool =
+  match frames with
+  | [] | Value.SElim _ :: _ -> false
+  | Value.SOut (_s, a) :: rest ->
+      Value.as_pt a |> Option.fold ~none:false ~some:(fun (_q, v) ->
+          if k > 0 then guarded_frame (k - 1) rest
+          else if k < 0 then false
+          else
+            Value.as_in v |> Fun.flip Option.bind (fun (_s, addr, _args) -> Value.as_ctor addr)
+            |> Option.is_some)
+
+and replay (globals : Global.t) (head : Value.t) (frames : Value.spine list) :
+    (Value.t, Error.t) result =
+  List.fold_left
+    (fun acc fr ->
+      let* v = acc in
+      match fr with
+      | Value.SOut (s, a) ->
+          let* applied = Rules.out_value (ev globals) s a v in
+          whnf globals applied
+      | Value.SElim se ->
+          Rules.elim_value (ev globals) se.Value.s_shape se.Value.s_scrut_q
+            se.Value.s_motive se.Value.s_branches se.Value.s_env v)
+    (Ok head) frames
 
 (** Readback, tot's [quote] with the diagram opened at the arity the pack
     reports.  [size] is the number of binders in scope, so a level [lvl]

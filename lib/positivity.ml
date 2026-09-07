@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/positivity.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/positivity.ml, delta: this header line *)
 (** Strict positivity and the family record, brief 3.2 and 3.3, new at
     M1 Stage G (M1-PLAN.md:49).  The record carries the pin's fields
     field for field, kan-lang-tot-pin/lib/global.ml:45-70.  SG-D14:  the
@@ -61,48 +61,13 @@ let ctor_of (name : string) (f : family) : ctor option =
   List.find_opt (fun (c : ctor) -> String.equal c.c_name name) f.f_ctors
 
 (** Does one of the mutual group occur in a term?  The walk is exhaustive
-    over term.ml:21-59, so a new constructor is a compile error here. *)
-let rec occurs (names : string list) (t : Term.t) : bool =
-  match t with
-  | Term.Var _ | Term.Univ _ | Term.Lit _ | Term.Auto -> false
-  | Term.Global n -> List.exists (String.equal n) names
-  | Term.Lan (s, d) -> occurs_shape names s || occurs names d
-  | Term.Ran (s, d) -> occurs_shape names s || occurs names d
-  | Term.In (s, a, args) ->
-      occurs_shape names s || occurs_addr names a || List.exists (occurs names) args
-  | Term.Sec (s, legs) -> occurs_shape names s || List.exists (occurs_leg names) legs
-  | Term.Out (s, a, head) ->
-      occurs_shape names s || occurs_addr names a || occurs names head
-  | Term.Elim e -> occurs_elim names e
-  | Term.Let (_, ty, def, body) ->
-      occurs names ty || occurs names def || occurs names body
-  | Term.Ann (tm, ty) -> occurs names tm || occurs names ty
+    over term.ml:21-59, so a new constructor is a compile error in
+    [Term.exists_name]. *)
+let occurs (names : string list) (t : Term.t) : bool =
+  Term.exists_name ~include_families:true names t
 
-and occurs_shape (names : string list) (s : Term.t Shape.t) : bool =
-  (* A type at a family is a former at the recursive shape, so the name
-     the shape carries is an occurrence (shape.ml [family]). *)
-  is_member names (Shape.family s) || List.exists (occurs names) (Shape.payload s)
-
-and is_member (names : string list) (n : string option) : bool =
+let is_member (names : string list) (n : string option) : bool =
   n |> Option.fold ~none:false ~some:(fun (m : string) -> List.exists (String.equal m) names)
-
-and occurs_addr (names : string list) (a : Term.addr) : bool =
-  Term.as_apt a
-  |> Option.fold ~none:false ~some:(fun ((_q : Quantity.t), (arg : Term.t)) ->
-         occurs names arg)
-
-and occurs_leg (names : string list) (lg : Term.leg) : bool = occurs names lg.Term.l_body
-
-and occurs_elim (names : string list) (e : Term.elim) : bool =
-  occurs_shape names e.Term.e_shape
-  || occurs names e.Term.e_scrut
-  || occurs_motive names e.Term.e_motive
-  || List.exists
-       (fun ((a : Term.addr), (lg : Term.leg)) -> occurs_addr names a || occurs_leg names lg)
-       e.Term.e_branches
-
-and occurs_motive (names : string list) (mo : Term.motive option) : bool =
-  mo |> Option.fold ~none:false ~some:(fun (m : Term.motive) -> occurs names m.Term.m_body)
 
 (** No occurrence at all.  Every position that is not the right of an
     arrow asks one of these two (D-M1-2). *)

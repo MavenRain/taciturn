@@ -1,19 +1,8 @@
-(* carried from kanon de40d65 lib/rules.ml, delta: this header line, the annotation-aware binder_marks view of brief 3.3, checked lambda domains, and compacted comments *)
-(** The single dispatch point, plan section 5.  [rules] answers one
-    question, "what are the four schema rules of this shape", and every
-    other kernel file asks it rather than reading a shape name.  This
-    file, shape.ml and pp.ml are the only three in lib/ that spell a
-    shape name, which is what the R0-AUDIT gate leg measures.
-
-    Every match on a shape below has five arms, so a sixth shape is a
-    compile error here before it is a silent fallthrough anywhere.
-
-    Two departures from the plan's pack, each a Stage B decision.
-    SB-D6:  [form_lan] and [form_ran] take [expected:Level.t option], so
-    the empty collection reads its universe from an annotation.  SB-D18:
-    the pack carries the descriptive [eta] row that spec_count.ml prints
-    AND the two expansion functions that conv.ml applies, because conv
-    must apply a row without naming the shape it belongs to. *)
+(* carried from kanon c418062 lib/rules.ml, delta: binder_marks, checked lambda domains, separate witness and linear modes, extern argument hook, and compacted comments *)
+(** Shape rules have one dispatch point, shared by the checker and
+    conversion. Every shape match is exhaustive. Former rules accept an
+    expected universe for empty collections (SB-D6); eta rules expose both
+    their descriptive rows and expansion functions (SB-D18). *)
 
 let ( let* ) = Result.bind
 
@@ -39,8 +28,11 @@ let open_closure (ev : evaluator) (clo : Value.closure) (args : Value.t list) :
     rules.ml never depends on check.ml and the two are not a cycle
     (SB-D12: lib/ holds no cell of state). *)
 type 'c ops = {
-  o_infer : 'c -> Quantity.t -> Term.t -> (Value.t, Error.t) result;
-  o_check : 'c -> Quantity.t -> Term.t -> Value.t -> (unit, Error.t) result;
+  o_infer : 'c -> Linear.mode -> Term.t -> (Value.t * Linear.usage, Error.t) result;
+  o_check : 'c -> Linear.mode -> Term.t -> Value.t -> (Linear.usage, Error.t) result;
+  o_close : 'c -> int -> Linear.mode -> Linear.usage -> (Linear.usage, Error.t) result;
+  o_argument : 'c -> Linear.mode -> Term.t -> Quantity.t -> Term.t -> Value.t ->
+    (Linear.usage, Error.t) result;
   o_infer_univ : 'c -> Term.t -> (Level.t, Error.t) result;
   o_conv : 'c -> ty:Value.t -> Value.t -> Value.t -> (bool, Error.t) result;
   o_conv_type : 'c -> Value.t -> Value.t -> (bool, Error.t) result;
@@ -58,10 +50,7 @@ type 'c ops = {
       (** the type the context or the global environment gives a neutral
           head, so conversion can walk a spine at a type (SB-D25) *)
   o_family : 'c -> string -> Positivity.family option;
-      (** M1 Stage G, brief 3.3:  the ONE accessor the mu pack reads a
-          family record through (SG-D2).  A second reader would put a
-          family lookup in check.ml and the R0-AUDIT leg forbids it
-          (dev/r0-audit.sh:6-11). *)
+      (** The mu pack's sole family accessor (SG-D2). *)
 }
 
 (** The derived eta table of SPEC.md section 4:  a former gets a row
@@ -98,17 +87,17 @@ type 'c rule_pack = {
     'c ops -> 'c -> Term.t Shape.t -> Term.t -> expected:Level.t option ->
     (Level.t, Error.t) result;
   intro_in :
-    'c ops -> 'c -> Quantity.t -> Term.t Shape.t -> Term.addr -> Term.t list ->
-    expected:Value.t -> (unit, Error.t) result;
+    'c ops -> 'c -> Linear.mode -> Term.t Shape.t -> Term.addr -> Term.t list ->
+    expected:Value.t -> (Linear.usage, Error.t) result;
   elim_elim :
-    'c ops -> 'c -> Quantity.t -> Term.elim -> expected:Value.t option ->
-    (Value.t, Error.t) result;
+    'c ops -> 'c -> Linear.mode -> Term.elim -> expected:Value.t option ->
+    (Value.t * Linear.usage, Error.t) result;
   intro_sec :
-    'c ops -> 'c -> Quantity.t -> Term.t Shape.t -> Term.leg list -> expected:Value.t ->
-    (unit, Error.t) result;
+    'c ops -> 'c -> Linear.mode -> Term.t Shape.t -> Term.leg list -> expected:Value.t ->
+    (Linear.usage, Error.t) result;
   elim_out :
-    'c ops -> 'c -> Quantity.t -> Term.t Shape.t -> Term.addr -> Term.t ->
-    (Value.t, Error.t) result;
+    'c ops -> 'c -> Linear.mode -> Term.t Shape.t -> Term.addr -> Term.t ->
+    (Value.t * Linear.usage, Error.t) result;
   beta : evaluator -> beta_redex -> (Value.t option, Error.t) result;
   eta : eta_row;
   diagram_arity : Value.t Shape.t -> int;
@@ -119,11 +108,8 @@ type 'c rule_pack = {
     Value.closure ->
     Value.vaddr ->
     ((Value.t option * Value.t) option, Error.t) result;
-      (** one step of a neutral spine at the right former:  the type of
-          the address argument, when the address carries one, and the
-          type the head has after the step.  [Ok None] means the address
-          does not fit the shape, and conversion then falls back to a
-          structural comparison (SB-D25). *)
+      (** One neutral spine step: address argument type and result type.
+          [Ok None] requests structural comparison (SB-D25). *)
   expand_ran : 'c expansion option;
   expand_lan : 'c expansion option;
   conv_diagram :
@@ -132,18 +118,11 @@ type 'c rule_pack = {
   ann_lvl_eq : Value.t Shape.t -> Level.t option -> Level.t option -> bool;
   lan_lvl : 'c ops -> 'c -> Value.t Shape.t -> Level.t list -> (Level.t, Error.t) result;
   ran_lvl : 'c ops -> 'c -> Value.t Shape.t -> Level.t list -> (Level.t, Error.t) result;
-      (** SG-D15:  the two level fields take the shape and the checker
-          ops, and they answer a result.  The mu shape needs both:  its
-          left former lives at the level the family record declares,
-          which is not a function of the payload levels (brief 3.5), and
-          its right former answers the M2 word, which no [Level.t]
-          can carry (SG-D4). *)
+      (** Mu formation reads the declared family level; its right former
+          reports the M2 error through this result (SG-D15). *)
   subsingleton : 'c ops -> 'c -> Value.t Shape.t -> (bool, Error.t) result;
-      (** M1 Stage H, brief 3.5 and SH-D1:  the subsingleton criterion of
-          brief 3.4, read through the pack.  Step one of conv.ml applies
-          it as named rule 2, so no shape name and no family lookup
-          enters conv.ml (dev/r0-audit.sh:6-11).  A shape that carries no
-          criterion answers [Ok false] and the comparison goes on. *)
+      (** Pack-directed subsingleton criterion for conversion (SH-D1).
+          Shapes without a criterion answer [Ok false]. *)
 }
 
 (** The framework axiom of R-Q6, SPEC.md section 6:  [imax l zero] is
@@ -195,8 +174,8 @@ let all_ok (xs : ('a, Error.t) result list) : ('a list, Error.t) result =
 (** Pairwise comparison of two shape payloads, [Ok false] when the
     lengths differ.  M1 Stage G:  two mu shapes are equal when the
     family name is the same and every index converts. *)
-let rec payload_eq (eq : Value.t -> Value.t -> (bool, Error.t) result)
-    (xs : Value.t list) (ys : Value.t list) : (bool, Error.t) result =
+let rec payload_eq (eq : 'a -> 'a -> (bool, Error.t) result)
+    (xs : 'a list) (ys : 'a list) : (bool, Error.t) result =
   match (xs, ys) with
   | [], [] -> Ok true
   | x :: xs', y :: ys' ->
@@ -304,11 +283,8 @@ let as_tsec (t : Term.t) : (Term.t Shape.t * Term.leg list) option =
   | Term.Global _ | Term.Lit _ | Term.Auto ->
       None
 
-(** M0 Stage B, brief 3.3:  the binder marks of a closed type, outermost
-    first.  A binder is a right former at the point shape, the one
-    [arrow] above builds, so the walk stops at the first head that is not
-    one.  lib/global.ml asks here to count binders, so that
-    file spells no shape name and the R0-AUDIT leg stays clean over it. *)
+(** Closed type binder marks, outermost first, through annotations.
+    Global linking uses this view without naming shapes. *)
 let rec binder_marks (ty : Term.t) : Quantity.t list =
   match ty with
   | Term.Ann (a, _ty) -> binder_marks a
@@ -333,6 +309,27 @@ let wrong_pack : string = "the rule pack does not match the shape of the term"
 let stuck_msg : string = "an elimination met a value it cannot eliminate"
 let leg_msg : string = "the leg address is outside the collection"
 let diagram_msg : string = "the diagram is not a section of the declared width"
+
+(** All introduction and elimination rules inspect a former through the
+    same weak-head check while preserving each rule's diagnostic. *)
+let former_view (ops : 'c ops) (ctx : 'c) (view : Value.t -> 'a option)
+    (message : string) (ty : Value.t) : (Value.t * 'a, Error.t) result =
+  let* w = ops.o_whnf ctx ty in
+  let* former = view w |> Option.to_result ~none:(Error.Mismatch message) in
+  Ok (w, former)
+
+let binder_quantity (subject : string) (source : string) (name : string)
+    (marked : Quantity.t) (declared : Quantity.t) : (unit, Error.t) result =
+  if Quantity.equal marked declared then Ok ()
+  else
+    Error (Error.Quantity
+      (Printf.sprintf "the %s %s is marked %s and the %s marks it %s"
+        subject name (Quantity.to_string marked) source (Quantity.to_string declared)))
+
+let infer_scrutinee (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (e : Term.elim) =
+  if not (Linear.erased mode) && Quantity.equal e.Term.e_scrut_q Quantity.Zero then
+    Error (Error.Quantity "an erased scrutinee cannot be eliminated at runtime")
+  else ops.o_infer ctx (Linear.multiply mode e.Term.e_scrut_q) e.Term.e_scrut
 
 (** A [let] binder for a partial view inside [beta]:  a view that does
     not match means the redex is stuck, and a stuck redex is [Ok None]. *)
@@ -436,15 +433,10 @@ let payload_lvl (f : Level.t list -> Level.t) (_ops : 'c ops) (_ctx : 'c)
     (_s : Value.t Shape.t) (ls : Level.t list) : (Level.t, Error.t) result =
   Ok (f ls)
 
-let spi_form_lan (ops : 'c ops) (ctx : 'c) (s : Term.t Shape.t) (diagram : Term.t)
-    ~(expected : Level.t option) : (Level.t, Error.t) result =
-  let _ = expected in
-  Result.map spi_lan_lvl (spi_levels ops ctx s diagram)
-
-let spi_form_ran (ops : 'c ops) (ctx : 'c) (s : Term.t Shape.t) (diagram : Term.t)
-    ~(expected : Level.t option) : (Level.t, Error.t) result =
-  let _ = expected in
-  Result.map spi_ran_lvl (spi_levels ops ctx s diagram)
+let spi_form (level : Level.t list -> Level.t) (ops : 'c ops) (ctx : 'c)
+    (s : Term.t Shape.t) (diagram : Term.t) ~expected:(_expected : Level.t option) :
+    (Level.t, Error.t) result =
+  Result.map level (spi_levels ops ctx s diagram)
 
 let spi_beta (ev : evaluator) (r : beta_redex) : (Value.t option, Error.t) result =
   match r with
@@ -462,14 +454,10 @@ let spi_beta (ev : evaluator) (r : beta_redex) : (Value.t option, Error.t) resul
 
 (** The expected type of a section at the point shape, with the fibre
     opened at a fresh variable. *)
-let spi_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (s : Term.t Shape.t)
-    (legs : Term.leg list) ~(expected : Value.t) : (unit, Error.t) result =
-  let* w = ops.o_whnf ctx expected in
-  let* vs, dclo, _u =
-    Value.as_ran w
-    |> Option.to_result
-         ~none:(Error.Mismatch "a section needs a right former as its expected type")
-  in
+let spi_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (s : Term.t Shape.t)
+    (legs : Term.leg list) ~(expected : Value.t) : (Linear.usage, Error.t) result =
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_ran "a section needs a right former as its expected type" expected in
   let* q, _x, dom_v =
     as_vpi vs
     |> Option.to_result
@@ -484,14 +472,7 @@ let spi_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (s : Term.t Shap
     one_of leg.Term.l_binders
     |> Option.to_result ~none:(Error.Mismatch "the leg binds the point once")
   in
-  let* () =
-    if Quantity.equal bq q then Ok ()
-    else
-      Error
-        (Error.Quantity
-           (Printf.sprintf "the binder %s is marked %s and the type marks it %s" bx
-              (Quantity.to_string bq) (Quantity.to_string q)))
-  in
+  let* () = binder_quantity "binder" "type" bx bq q in
   let* sq, _sx, dom = as_vpi s |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* _l = ops.o_infer_univ ctx dom in
   let* actual = ops.o_eval ctx dom in
@@ -502,17 +483,16 @@ let spi_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (s : Term.t Shap
   in
   let v = Value.var (ops.o_size ctx) in
   let* cod = open_closure (ops.o_ev ctx) dclo [ v ] in
-  ops.o_check (ops.o_bind bx q dom_v ctx) mode leg.Term.l_body cod
+  let ctx' = ops.o_bind bx q dom_v ctx in
+  let* uses = ops.o_check ctx' (Linear.runtime mode) leg.Term.l_body cod in
+  let* free = ops.o_close ctx' (ops.o_size ctx) mode uses in
+  Ok (Linear.scale mode (Linear.captures free))
 
-let spi_intro_in (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shape.t)
+let spi_intro_in (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (_s : Term.t Shape.t)
     (addr : Term.addr) (args : Term.t list) ~(expected : Value.t) :
-    (unit, Error.t) result =
-  let* w = ops.o_whnf ctx expected in
-  let* vs, dclo, _u =
-    Value.as_lan w
-    |> Option.to_result
-         ~none:(Error.Mismatch "a pair needs a left former as its expected type")
-  in
+    (Linear.usage, Error.t) result =
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_lan "a pair needs a left former as its expected type" expected in
   let* q, _x, dom_v =
     as_vpi vs
     |> Option.to_result ~none:(Error.Mismatch "a pair needs a point former")
@@ -525,41 +505,36 @@ let spi_intro_in (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shap
     one_of args
     |> Option.to_result ~none:(Error.Mismatch "a pair carries one fibre element")
   in
-  let* () = ops.o_check ctx (Quantity.mul mode q) point dom_v in
+  let* point_uses = ops.o_check ctx (Linear.multiply mode q) point dom_v in
   let* point_v = ops.o_eval ctx point in
   let* cod = open_closure (ops.o_ev ctx) dclo [ point_v ] in
-  ops.o_check ctx mode fibre cod
+  let* fibre_uses = ops.o_check ctx mode fibre cod in
+  Ok (Linear.sequence point_uses fibre_uses)
 
-let spi_elim_out (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shape.t)
-    (addr : Term.addr) (head : Term.t) : (Value.t, Error.t) result =
+let spi_elim_out (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (_s : Term.t Shape.t)
+    (addr : Term.addr) (head : Term.t) : (Value.t * Linear.usage, Error.t) result =
   let* _aq, point =
     Term.as_apt addr
     |> Option.to_result ~none:(Error.Wrong_leg "an application takes the point address")
   in
-  let* head_ty = ops.o_infer ctx mode head in
-  let* w = ops.o_whnf ctx head_ty in
-  let* vs, dclo, _u =
-    Value.as_ran w
-    |> Option.to_result
-         ~none:(Error.Mismatch "the head of an application is not a function")
-  in
+  let* head_ty, head_uses = ops.o_infer ctx mode head in
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_ran "the head of an application is not a function" head_ty in
   let* q, _x, dom_v =
     as_vpi vs
     |> Option.to_result
          ~none:(Error.Mismatch "the head of an application is not a function")
   in
-  let* () = ops.o_check ctx (Quantity.mul mode q) point dom_v in
+  let* point_uses = ops.o_argument ctx mode head q point dom_v in
   let* point_v = ops.o_eval ctx point in
-  open_closure (ops.o_ev ctx) dclo [ point_v ]
+  let* result = open_closure (ops.o_ev ctx) dclo [ point_v ] in
+  Ok (result, Linear.sequence head_uses point_uses)
 
-let spi_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
-    ~(expected : Value.t option) : (Value.t, Error.t) result =
-  let* scrut_ty = ops.o_infer ctx (Quantity.mul mode e.Term.e_scrut_q) e.Term.e_scrut in
-  let* w = ops.o_whnf ctx scrut_ty in
-  let* vs, dclo, _u =
-    Value.as_lan w
-    |> Option.to_result ~none:(Error.Mismatch "the scrutinee is not a left former")
-  in
+let spi_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (e : Term.elim)
+    ~(expected : Value.t option) : (Value.t * Linear.usage, Error.t) result =
+  let* scrut_ty, scrut_uses = infer_scrutinee ops ctx mode e in
+  let* w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_lan "the scrutinee is not a left former" scrut_ty in
   let* q, _x, dom_v =
     as_vpi vs |> Option.to_result ~none:(Error.Mismatch wrong_pack)
   in
@@ -583,14 +558,7 @@ let spi_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
            (Error.Missing_branch
               "the branch binds the point and the fibre element (D-M0-3)")
   in
-  let* () =
-    if Quantity.equal q1 q then Ok ()
-    else
-      Error
-        (Error.Quantity
-           (Printf.sprintf "the branch binder %s is marked %s and the type marks it %s" x1
-              (Quantity.to_string q1) (Quantity.to_string q)))
-  in
+  let* () = binder_quantity "branch binder" "type" x1 q1 q in
   let size = ops.o_size ctx in
   let point = Value.var size in
   let fibre = Value.var (size + 1) in
@@ -598,8 +566,9 @@ let spi_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
   let ctx' = ops.o_bind x2 q2 cod (ops.o_bind x1 q1 dom_v ctx) in
   let self = Value.VIn (vs, Value.VAPt (q, point), [ fibre ]) in
   let* target = elim_result ops ctx e.Term.e_motive expected self in
-  let* () = ops.o_check ctx' mode leg.Term.l_body target in
-  Ok result
+  let* uses = ops.o_check ctx' (Linear.runtime mode) leg.Term.l_body target in
+  let* free = ops.o_close ctx' (ops.o_size ctx) mode uses in
+  Ok (result, Linear.sequence scrut_uses (Linear.scale mode free))
 
 (** Eta at the right former of the point shape, SPEC.md section 4 row
     one:  [f] is [Sec [x => Out (APt x) f]], applied by expansion. *)
@@ -627,13 +596,8 @@ let proj_branch (q : Quantity.t) (which : int) : (Term.addr * Term.leg) list =
       } );
   ]
 
-(** The projection motive of D-M0-3, built here exactly as
-    surface/elab.ml builds it for ".1" and ".2" (SB-D38).  A projection
-    of a neutral pair freezes on the spine, and two frozen eliminations
-    convert only when their motives convert, so the motive the eta rule
-    writes must be the motive the surface writes.  The motive of the
-    first projection is the domain and the motive of the second is the
-    diagram read at the first projection of the point itself. *)
+(** Eta and surface projections must freeze identical motives (SB-D38):
+    the domain for the first projection and the fibre at it for the second. *)
 let proj_motive (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.closure)
     (q : Quantity.t) (x : string) (dom_v : Value.t) (which : int) :
     (Term.motive option, Error.t) result =
@@ -651,10 +615,8 @@ let proj_motive (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.cl
   let* m_body = ops.o_quote (ops.o_bind x q dom_v ctx) body_v in
   Ok (Some { Term.m_ind = None; m_idx = []; m_self = "self"; m_body })
 
-(** Eta at the left former of the point shape, row two:  [p] is
-    [In (APt p.1) [p.2]], compared projection by projection.  The
-    scrutinee mark is [Many] at both projections, as the surface writes
-    it, so the frozen forms of the two sides agree (SB-D38). *)
+(** Pair eta compares each projection at scrutinee mark One, matching
+    the surface's frozen forms (SB-D38). *)
 let spi_eta_lan (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.closure)
     (a : Value.t) (b : Value.t) : (bool, Error.t) result =
   let* q, x, dom_v =
@@ -663,14 +625,14 @@ let spi_eta_lan (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.cl
   let ev = ops.o_ev ctx in
   let env = ops.o_env ctx in
   let* mo_first = proj_motive ops ctx s dclo q x dom_v 0 in
-  let* a1 = elim_with spi_beta ev s Quantity.Many mo_first (proj_branch q 0) env a in
-  let* b1 = elim_with spi_beta ev s Quantity.Many mo_first (proj_branch q 0) env b in
+  let* a1 = elim_with spi_beta ev s Quantity.One mo_first (proj_branch q 0) env a in
+  let* b1 = elim_with spi_beta ev s Quantity.One mo_first (proj_branch q 0) env b in
   let* first = ops.o_conv ctx ~ty:dom_v a1 b1 in
   if first then
     let* cod = open_closure ev dclo [ a1 ] in
     let* mo_second = proj_motive ops ctx s dclo q x dom_v 1 in
-    let* a2 = elim_with spi_beta ev s Quantity.Many mo_second (proj_branch q 1) env a in
-    let* b2 = elim_with spi_beta ev s Quantity.Many mo_second (proj_branch q 1) env b in
+    let* a2 = elim_with spi_beta ev s Quantity.One mo_second (proj_branch q 1) env a in
+    let* b2 = elim_with spi_beta ev s Quantity.One mo_second (proj_branch q 1) env b in
     ops.o_conv ctx ~ty:cod a2 b2
   else Ok false
 
@@ -685,6 +647,8 @@ let spi_conv_diagram (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t)
   let* b2 = open_closure ev d2 [ v ] in
   ops.o_conv_type (ops.o_bind x q dom_v ctx) b1 b2
 
+(** Every shape but the empty collection reads its universe from its
+    diagram, so the SB-D7 slot carries nothing here. *)
 (** One spine step at the point shape:  the argument is at the domain
     and the head then has the diagram read at that argument. *)
 let spi_spine_ty (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.closure)
@@ -698,7 +662,8 @@ let spi_spine_ty (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.c
                   (fun (cod : Value.t) -> Some (Some dom, cod))
                   (open_closure (ops.o_ev ctx) dclo [ arg ])))
 
-(** The point diagram binds once; the collection diagram binds nothing. *)
+(** The point diagram binds the point, so a reader opens one binder to
+    look under it.  The collection diagram binds nothing. *)
 let spi_diagram_arity (_s : Value.t Shape.t) : int = 1
 
 let coll_diagram_arity (_s : Value.t Shape.t) : int = 0
@@ -707,15 +672,17 @@ let spi_ann_lvl_eq (_s : Value.t Shape.t) (_u1 : Level.t option) (_u2 : Level.t 
     bool =
   true
 
-(** The two M0 packs have no subsingleton criterion (SH-D1). *)
+(** M1 Stage H, brief 3.5:  a shape with no subsingleton criterion.  The
+    two M0 packs answer [Ok false], so step one of conv.ml stands down at
+    every shape but the recursive one (SH-D1). *)
 let no_subsingleton (_ops : 'c ops) (_ctx : 'c) (_s : Value.t Shape.t) :
     (bool, Error.t) result =
   Ok false
 
 let spi_pack (() : unit) : 'c rule_pack =
   {
-    form_lan = spi_form_lan;
-    form_ran = spi_form_ran;
+    form_lan = (fun ops ctx s d ~expected -> spi_form spi_lan_lvl ops ctx s d ~expected);
+    form_ran = (fun ops ctx s d ~expected -> spi_form spi_ran_lvl ops ctx s d ~expected);
     intro_in = spi_intro_in;
     elim_elim = spi_elim_elim;
     intro_sec = spi_intro_sec;
@@ -794,15 +761,11 @@ let coll_beta (ev : evaluator) (r : beta_redex) : (Value.t option, Error.t) resu
       in
       Result.map Option.some (ev.ev_eval (List.rev_append args env) leg.Term.l_body)
 
-let coll_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (s : Term.t Shape.t)
-    (legs : Term.leg list) ~(expected : Value.t) : (unit, Error.t) result =
+let coll_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (s : Term.t Shape.t)
+    (legs : Term.leg list) ~(expected : Value.t) : (Linear.usage, Error.t) result =
   let* n = as_vcoll s |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
-  let* w = ops.o_whnf ctx expected in
-  let* vs, dclo, _u =
-    Value.as_ran w
-    |> Option.to_result
-         ~none:(Error.Mismatch "a tuple needs a right former as its expected type")
-  in
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_ran "a tuple needs a right former as its expected type" expected in
   let* dn = as_vcoll vs |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* () =
     if Int.equal dn n && Int.equal (List.length legs) n then Ok ()
@@ -812,7 +775,7 @@ let coll_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (s : Term.t Sha
   let* pairs =
     zip legs dlegs |> Option.to_result ~none:(Error.Mismatch diagram_msg)
   in
-  let* _checked =
+  let* checked =
     all_ok
       (List.map
          (fun ((lg : Term.leg), (dl : Value.vleg)) ->
@@ -820,17 +783,13 @@ let coll_intro_sec (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (s : Term.t Sha
            ops.o_check ctx mode lg.Term.l_body ty)
          pairs)
   in
-  Ok ()
+  Ok (List.fold_left Linear.sequence Linear.empty checked)
 
-let coll_intro_in (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shape.t)
+let coll_intro_in (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (_s : Term.t Shape.t)
     (addr : Term.addr) (args : Term.t list) ~(expected : Value.t) :
-    (unit, Error.t) result =
-  let* w = ops.o_whnf ctx expected in
-  let* vs, dclo, _u =
-    Value.as_lan w
-    |> Option.to_result
-         ~none:(Error.Mismatch "an injection needs a left former as its expected type")
-  in
+    (Linear.usage, Error.t) result =
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_lan "an injection needs a left former as its expected type" expected in
   let* n = as_vcoll vs |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* k =
     Term.as_aleg addr
@@ -845,26 +804,24 @@ let coll_intro_in (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Sha
   in
   ops.o_check ctx mode payload ty
 
-let coll_elim_out (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shape.t)
-    (addr : Term.addr) (head : Term.t) : (Value.t, Error.t) result =
+let coll_elim_out (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (_s : Term.t Shape.t)
+    (addr : Term.addr) (head : Term.t) : (Value.t * Linear.usage, Error.t) result =
   let* k =
     Term.as_aleg addr
     |> Option.to_result ~none:(Error.Wrong_leg "a projection takes the leg address")
   in
-  let* head_ty = ops.o_infer ctx mode head in
-  let* w = ops.o_whnf ctx head_ty in
-  let* vs, dclo, _u =
-    Value.as_ran w
-    |> Option.to_result ~none:(Error.Mismatch "a projection needs a right former")
-  in
+  let* head_ty, uses = ops.o_infer ctx mode head in
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_ran "a projection needs a right former" head_ty in
   let* n = as_vcoll vs |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* () = if k >= 0 && k < n then Ok () else Error (Error.Wrong_leg leg_msg) in
   let* dlegs = coll_legs_of ops ctx dclo in
-  coll_leg_ty ops ctx dlegs k
+  let* result = coll_leg_ty ops ctx dlegs k in
+  Ok (result, uses)
 
-let coll_branch (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
+let coll_branch (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (e : Term.elim)
     (vs : Value.t Shape.t) (dlegs : Value.vleg list) (expected : Value.t option) (k : int)
-    : (unit, Error.t) result =
+    : (Linear.usage, Error.t) result =
   let* _key, leg =
     List.find_opt
       (fun ((a : Term.addr), (_l : Term.leg)) ->
@@ -880,16 +837,15 @@ let coll_branch (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
   let* ty = coll_leg_ty ops ctx dlegs k in
   let self = Value.VIn (vs, Value.VALeg k, [ Value.var (ops.o_size ctx) ]) in
   let* target = elim_result ops ctx e.Term.e_motive expected self in
-  ops.o_check (ops.o_bind bx bq ty ctx) mode leg.Term.l_body target
+  let ctx' = ops.o_bind bx bq ty ctx in
+  let* uses = ops.o_check ctx' (Linear.runtime mode) leg.Term.l_body target in
+  ops.o_close ctx' (ops.o_size ctx) mode uses
 
-let coll_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
-    ~(expected : Value.t option) : (Value.t, Error.t) result =
-  let* scrut_ty = ops.o_infer ctx (Quantity.mul mode e.Term.e_scrut_q) e.Term.e_scrut in
-  let* w = ops.o_whnf ctx scrut_ty in
-  let* vs, dclo, _u =
-    Value.as_lan w
-    |> Option.to_result ~none:(Error.Mismatch "the scrutinee is not a left former")
-  in
+let coll_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (e : Term.elim)
+    ~(expected : Value.t option) : (Value.t * Linear.usage, Error.t) result =
+  let* scrut_ty, scrut_uses = infer_scrutinee ops ctx mode e in
+  let* w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_lan "the scrutinee is not a left former" scrut_ty in
   let* n = as_vcoll vs |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* () = check_motive ops ctx e.Term.e_motive w in
   let* scrut_v = ops.o_eval ctx e.Term.e_scrut in
@@ -903,10 +859,11 @@ let coll_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
               (List.length e.Term.e_branches) n))
   in
   let* dlegs = coll_legs_of ops ctx dclo in
-  let* _checked =
+  let* checked =
     all_ok (List.map (coll_branch ops ctx mode e vs dlegs expected) (List.init n Fun.id))
   in
-  Ok result
+  let branches = List.fold_left Linear.alternative Linear.unreachable checked in
+  Ok (result, Linear.sequence scrut_uses (Linear.scale mode branches))
 
 (** Eta at the right former of the collection shape, SPEC.md section 4
     row three:  [t] is the section of its own projections, and at width
@@ -934,6 +891,8 @@ let coll_conv_diagram (ops : 'c ops) (ctx : 'c) (_s : Value.t Shape.t)
   let* b = open_closure ev d2 [] in
   ops.o_conv_type ctx a b
 
+(** Empty diagrams take their level from an annotation, defaulting to
+    Prop. Nonempty diagrams carry their own level (SB-D7). *)
 (** One spine step at the collection shape:  a projection carries no
     argument, so only the leg type moves. *)
 let coll_spine_ty (ops : 'c ops) (ctx : 'c) (_s : Value.t Shape.t)
@@ -985,11 +944,7 @@ let coll_pack (() : unit) : 'c rule_pack =
     former is refused INSIDE it;  a section is SNu's (SPEC.md:32). *)
 let mu_ran_word : string = "a right former at a mu shape arrives at M2"
 
-(** M1 Stage H, brief 3.3 and SH-D5:  the branch types of an indexed
-    family are not recoverable from the scrutinee type alone, so the
-    motive is required and the pack answers this word when it is
-    missing (A7, M1-PLAN.md:80).  It stands where the Stage H word of
-    SG-D9 stood. *)
+(** Indexed branch types require an explicit motive (SH-D5). *)
 let mu_motive_word : string = "an elimination at a mu shape needs a motive"
 
 (** M1 Stage H, brief 3.4 and SH-D4:  a family that does not pass the
@@ -1003,11 +958,8 @@ let as_vmu (s : 'a Shape.t) : (string * 'a list) option =
   | Shape.SMu (n, ix) -> Some (n, ix)
   | Shape.SPi (_, _, _) | Shape.SColl _ | Shape.SPar (_, _) | Shape.SNu (_, _) -> None
 
-(** Brief 3.4:  tot's three-part criterion, ported part for part from
-    kan-lang-tot-pin/lib/check.ml:223 [zero_eliminable] and never
-    restated in kanon's own words (D-M1-3, SH-D2).  Each arm carries the
-    pin line it is the port of.  The port reads three fields of the
-    record and adds none. *)
+(** Tot's three-part [zero_eliminable] criterion, with source line
+    references retained on each arm (D-M1-3, SH-D2). *)
 let mu_zero_eliminable (fam : Positivity.family) : bool =
   match fam.Positivity.f_status with
   (* pin check.ml:225 *)
@@ -1044,19 +996,18 @@ let mu_family (ops : 'c ops) (ctx : 'c) (n : string) : (Positivity.family, Error
       else Error (Error.Not_yet Positivity.nonpositive_word)
   | Positivity.Builtin | Positivity.Provisional -> Ok f
 
-(** Brief 3.5:  the pack answers the criterion, so conv.ml applies named
-    rule 2 through this field and holds no family lookup of its own
-    (SH-D1).  A family the accessor cannot answer for is not a
-    subsingleton as far as the rule is concerned, so a failure here
-    weakens conversion to its other steps and never strengthens it
-    (conv.ml, rule 1). *)
+(** Only Prop families qualify: erased Type fields may contain distinct
+    types. A failed lookup weakens conversion to its other rules (SH-D1). *)
 let mu_subsingleton (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) :
     (bool, Error.t) result =
   as_vmu s
   |> Option.fold ~none:(Ok false) ~some:(fun ((n : string), (_ix : Value.t list)) ->
          mu_family ops ctx n
          |> Result.fold
-              ~ok:(fun (fam : Positivity.family) -> Ok (mu_zero_eliminable fam))
+              ~ok:(fun (fam : Positivity.family) ->
+                Ok
+                  (Level.equal fam.Positivity.f_level Level.zero
+                  && mu_zero_eliminable fam))
               ~error:(fun (_e : Error.t) -> Ok false))
 
 (** SG-D16:  the diagram at the mu shape is the parameter section, one
@@ -1069,9 +1020,9 @@ let mu_params_of (diagram : Term.t) : (Term.t list, Error.t) result =
 
 (** Check an expression list against a telescope (pin check.ml:1804-1827):
     each type opens in the values before it, innermost value first. *)
-let mu_telescope (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (what : string)
+let mu_telescope_uses (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (what : string)
     (tele : Positivity.telescope) (args : Term.t list) (env : Value.t list) :
-    (Value.t list, Error.t) result =
+    (Value.t list * Linear.usage, Error.t) result =
   let* pairs =
     zip tele args
     |> Option.to_result
@@ -1082,21 +1033,24 @@ let mu_telescope (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (what : string)
   in
   let ev = ops.o_ev ctx in
   List.fold_left
-    (fun (acc : (Value.t list, Error.t) result)
+    (fun (acc : (Value.t list * Linear.usage, Error.t) result)
          (((q, _x, ty), arg) : (Quantity.t * string * Term.t) * Term.t) ->
-      let* got = acc in
+      let* got, uses = acc in
       let* tyv = ev.ev_eval got ty in
-      let* () = ops.o_check ctx (Quantity.mul mode q) arg tyv in
+      let* arg_uses = ops.o_check ctx (Linear.multiply mode q) arg tyv in
       let* v = ops.o_eval ctx arg in
-      Ok (v :: got))
-    (Ok env) pairs
+      Ok (v :: got, Linear.sequence uses arg_uses))
+    (Ok (env, Linear.empty)) pairs
+
+let mu_telescope ops ctx mode what tele args env =
+  Result.map fst (mu_telescope_uses ops ctx mode what tele args env)
 
 (** Formation (M1-PLAN.md:78, brief 3.1):  a declared, positive family,
     parameters and indices erased;  SG-D8 takes its level (brief 3.4, A5). *)
 let mu_form_lan (ops : 'c ops) (ctx : 'c) (s : Term.t Shape.t) (diagram : Term.t)
     ~(expected : Level.t option) : (Level.t, Error.t) result =
   let _ = expected in
-  let z = Quantity.Zero in
+  let z = Linear.mode Quantity.Zero in
   let* n, ix = as_vmu s |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* fam = mu_family ops ctx n in
   let* params = mu_params_of diagram in
@@ -1152,14 +1106,11 @@ let mu_indices (ops : 'c ops) (ctx : 'c) (n : string) (ct : Positivity.ctor)
 
 (** Introduction, M1-PLAN.md:79 and brief 3.1:  the address names the
     constructor, every argument checks and the result indices unify. *)
-let mu_intro_in (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shape.t)
+let mu_intro_in (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (_s : Term.t Shape.t)
     (addr : Term.addr) (args : Term.t list) ~(expected : Value.t) :
-    (unit, Error.t) result =
-  let* w = ops.o_whnf ctx expected in
-  let* vs, dclo, _u =
-    Value.as_lan w
-    |> Option.to_result ~none:(Error.Mismatch "a constructor needs a left former")
-  in
+    (Linear.usage, Error.t) result =
+  let* _w, (vs, dclo, _u) =
+    former_view ops ctx Value.as_lan "a constructor needs a left former" expected in
   let* n, ixv = as_vmu vs |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* c =
     Term.as_actor addr
@@ -1171,8 +1122,9 @@ let mu_intro_in (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (_s : Term.t Shape
     |> Option.to_result ~none:(Error.Unbound (c ^ " is not a constructor of " ^ n))
   in
   let* penv = mu_param_env ops ctx dclo in
-  let* env = mu_telescope ops ctx mode c ct.Positivity.c_args args penv in
-  mu_indices ops ctx n ct ixv env
+  let* env, uses = mu_telescope_uses ops ctx mode c ct.Positivity.c_args args penv in
+  let* () = mu_indices ops ctx n ct ixv env in
+  Ok uses
 
 (** Brief 3.3, SH-D5 and SH-D6:  the motive is required, it names the
     family of the scrutinee shape, and it binds one index binder per
@@ -1214,11 +1166,8 @@ let mu_result (ops : 'c ops) (ctx : 'c) (mo : Term.motive) (idx : Value.t list)
     (self : Value.t) : (Value.t, Error.t) result =
   (ops.o_ev ctx).ev_eval (self :: List.rev_append idx (ops.o_env ctx)) mo.Term.m_body
 
-(** The motive is a type under its index binders and its scrutinee
-    binder, so a bad motive fails here and not at the first branch, as
-    [check_motive] does at the M0 shapes.  The index binders are erased
-    (A2), and the answer is the universe of the motive, which brief 3.4
-    reads to tell a large elimination from a small one. *)
+(** Check the motive under erased index and scrutinee binders, returning
+    its universe for the large-elimination check. *)
 let mu_motive_lvl (ops : 'c ops) (ctx : 'c) (n : string) (fam : Positivity.family)
     (mo : Term.motive) (dclo : Value.closure) (u : Level.t option) (penv : Value.t list) :
     (Level.t, Error.t) result =
@@ -1243,11 +1192,8 @@ let mu_motive_lvl (ops : 'c ops) (ctx : 'c) (n : string) (fam : Positivity.famil
   let self_ty = Value.VLan (Shape.SMu (n, List.rev vals), dclo, u) in
   ops.o_infer_univ (ops.o_bind mo.Term.m_self Quantity.Zero self_ty ctx') mo.Term.m_body
 
-(** Brief 3.4 and M1-PLAN.md:86:  an elimination out of a proposition
-    into a motive above the proposition universe is admitted only when
-    the family passes the criterion (SH-D3, SH-D4).  A family above the
-    proposition universe and a motive at it are both small, so neither
-    asks the criterion. *)
+(** Only elimination from Prop into a higher motive needs the
+    zero-eliminable criterion (SH-D3, SH-D4). *)
 let mu_large (n : string) (fam : Positivity.family) (mlvl : Level.t) :
     (unit, Error.t) result =
   match () with
@@ -1307,14 +1253,11 @@ let mu_cover (n : string) (names : string list) (branches : (Term.addr * Term.le
       else Error (Error.Unbound (k ^ " is not a constructor of " ^ n)))
     (Ok ()) keys
 
-(** Brief 3.2 and SH-D9:  the leg binds the constructor arguments in
-    order, one binder per field, at the field quantities the record
-    carries (M1-PLAN.md:61).  The body is checked at [m_body]
-    instantiated at that constructor's result index expressions and at
-    its own [In] term (SH-D7). *)
-let mu_branch (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (n : string)
+(** Bind constructor fields in order at their declared quantities.
+    Instantiate the motive at the result indices and constructor (SH-D7). *)
+let mu_branch (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (n : string)
     (fam : Positivity.family) (mo : Term.motive) (penv : Value.t list)
-    (branches : (Term.addr * Term.leg) list) (c : string) : (unit, Error.t) result =
+    (branches : (Term.addr * Term.leg) list) (c : string) : (Linear.usage, Error.t) result =
   let* ct =
     Positivity.ctor_of c fam
     |> Option.to_result ~none:(Error.Unbound (c ^ " is not a constructor of " ^ n))
@@ -1346,13 +1289,8 @@ let mu_branch (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (n : string)
         let* c_acc, env_acc, vals_acc = acc in
         let* tyv = ev.ev_eval env_acc ty in
         let v = Value.var (ops.o_size c_acc) in
-        if Quantity.equal bq q then
-          Ok (ops.o_bind bx q tyv c_acc, v :: env_acc, v :: vals_acc)
-        else
-          Error
-            (Error.Quantity
-               (Printf.sprintf "the branch binder %s is marked %s and the field marks it %s"
-                  bx (Quantity.to_string bq) (Quantity.to_string q))))
+        let* () = binder_quantity "branch binder" "field" bx bq q in
+        Ok (ops.o_bind bx q tyv c_acc, v :: env_acc, v :: vals_acc))
       (Ok (ctx, penv, []))
       pairs
   in
@@ -1361,20 +1299,18 @@ let mu_branch (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (n : string)
   in
   let self = Value.VIn (Shape.SMu (n, idx), Value.VACtor c, List.rev vals) in
   let* target = mu_result ops ctx mo idx self in
-  ops.o_check ctx' mode leg.Term.l_body target
+  let* uses = ops.o_check ctx' (Linear.runtime mode) leg.Term.l_body target in
+  ops.o_close ctx' (ops.o_size ctx) mode uses
 
 (** Elimination, M1-PLAN.md:80 and brief 3.1 to 3.4.  The expected type
     never stands in as the constant cocone here, because the motive is
     required (SH-D5). *)
-let mu_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
-    ~(expected : Value.t option) : (Value.t, Error.t) result =
+let mu_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Linear.mode) (e : Term.elim)
+    ~(expected : Value.t option) : (Value.t * Linear.usage, Error.t) result =
   let _ = expected in
-  let* scrut_ty = ops.o_infer ctx (Quantity.mul mode e.Term.e_scrut_q) e.Term.e_scrut in
-  let* w = ops.o_whnf ctx scrut_ty in
-  let* vs, dclo, u =
-    Value.as_lan w
-    |> Option.to_result ~none:(Error.Mismatch "the scrutinee is not a left former")
-  in
+  let* scrut_ty, scrut_uses = infer_scrutinee ops ctx mode e in
+  let* _w, (vs, dclo, u) =
+    former_view ops ctx Value.as_lan "the scrutinee is not a left former" scrut_ty in
   let* n, ixv = as_vmu vs |> Option.to_result ~none:(Error.Mismatch wrong_pack) in
   let* fam = mu_family ops ctx n in
   let* mo = mu_motive_of n fam ixv e in
@@ -1383,18 +1319,16 @@ let mu_elim_elim (ops : 'c ops) (ctx : 'c) (mode : Quantity.t) (e : Term.elim)
   let* () = mu_large n fam mlvl in
   let* names = mu_ctor_names n fam in
   let* () = mu_cover n names e.Term.e_branches in
-  let* _checked =
+  let* checked =
     all_ok (List.map (mu_branch ops ctx mode n fam mo penv e.Term.e_branches) names)
   in
   let* scrut_v = ops.o_eval ctx e.Term.e_scrut in
-  mu_result ops ctx mo ixv scrut_v
+  let* result = mu_result ops ctx mo ixv scrut_v in
+  let branches = List.fold_left Linear.alternative Linear.unreachable checked in
+  Ok (result, Linear.sequence scrut_uses (Linear.scale mode branches))
 
-(** Reduction, M1-PLAN.md:81 and brief 3.1:  an [Elim] at
-    [In (SMu .., ACtor c, args)] reduces to the branch at [c] with the
-    arguments substituted.  A recursive argument carries the recursive
-    result when the translation of Stage I built the [Elim];  this stage
-    lands the reduction that translation feeds.  A section at the mu
-    shape is still SNu's, so [BOut] keeps the M2 word (SG-D4). *)
+(** Constructor elimination substitutes its fields into the selected
+    branch. Right elimination remains reserved for M2 (SG-D4). *)
 let mu_beta (ev : evaluator) (r : beta_redex) : (Value.t option, Error.t) result =
   match r with
   | BOut (_, _, _) -> Error (Error.Not_yet mu_ran_word)
@@ -1451,10 +1385,7 @@ let mu_pack (() : unit) : 'c rule_pack =
     subsingleton = mu_subsingleton;
   }
 
-(** The dispatch of plan section 5.  Three shapes have a pack;  the
-    other two carry their milestone word, so a term that reaches the
-    checker at one of them fails with the name of the milestone that
-    admits it (D-M0-2). *)
+(** Three shapes have packs; the other two report their milestone. *)
 let rules (s : 'a Shape.t) : ('c rule_pack, Error.t) result =
   match s with
   | Shape.SPi (_, _, _) -> Ok (spi_pack ())
@@ -1478,10 +1409,7 @@ let elim_value (ev : evaluator) (s : Value.t Shape.t) (q : Quantity.t)
   let* (pack : unit rule_pack) = rules s in
   elim_with pack.beta ev s q mo branches env v
 
-(** One sample per declared shape, in the order shape.ml declares them.
-    [admitted] and [eta_table] are read off [rules] itself, so a shape
-    that gains or loses a pack moves the R0 counts with no edit in
-    spec_count.ml (brief 3.6). *)
+(** Declared shape samples drive R0 counts directly from their packs. *)
 let samples : Term.t Shape.t list =
   [
     Shape.SPi (Quantity.Many, "x", Term.Univ Level.zero);

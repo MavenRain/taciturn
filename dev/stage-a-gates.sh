@@ -84,7 +84,7 @@ g5_lines=$(awk 'END { print NR }' $ROOT/PIN)
 g5_sha=$(git -C $ROOT/vendor/kanon rev-parse HEAD 2>&1)
 g5_gm=$(awk 'END { print NR }' $ROOT/.gitmodules)
 g5_h=$(rg -c -e '^\[submodule "vendor/kanon"\]$' -e '^\tpath = vendor/kanon$' -e '^\turl = /Users/oobi/Documents/kanon$' $ROOT/.gitmodules || true)
-if [[ $g5_pin == de40d65 && $g5_lines -eq 1 && $g5_sha == de40d65* && $g5_gm -eq 3 && ${g5_h:-0} -eq 3 ]]; then
+if [[ $g5_pin == c4180626123687858ff83408bab801c6f87e3e71 && $g5_lines -eq 1 && $g5_sha == $g5_pin && $g5_gm -eq 3 && ${g5_h:-0} -eq 3 ]]; then
   print -r -- "SA-G5 PASS PIN $g5_pin on 1 line, vendor/kanon HEAD $g5_sha, .gitmodules 3 of 3 lines matched"
 else
   print -r -- "SA-G5 FAIL PIN [$g5_pin] lines $g5_lines, vendor HEAD [$g5_sha], .gitmodules $g5_gm lines, ${g5_h:-0} of 3 matched"

@@ -38,7 +38,7 @@ let check (name : string) (expected : bool) (a : Term.t) (b : Term.t) : bool =
          false)
 
 let () =
-  let nat (n : int) : Term.t = Term.Lit (Literal.LInt n) in
+  let nat (n : int) : Term.t = Term.Lit (Literal.LInt (Bignum.of_int n)) in
   let forged (n : int) : Term.t = application "f" (Term.Global "P") (nat n) in
   let natural (n : int) : Term.t = application "f" Prim.nat_ty (nat n) in
   let proof (name : string) : Term.t =

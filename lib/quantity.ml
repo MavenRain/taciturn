@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/quantity.ml, delta: this header line, and the fourth mark W between Zero and One with its mul, equal and to_string arms (M0-PLAN section 4 delta 1) *)
+(* carried from kanon c418062 lib/quantity.ml, delta: W algebra retained, upstream path usage extracted into Linear *)
 (** Usage marks of the witness fragment of QTT.  [Zero] binders exist
     only at check time (types, proofs) and erase before evaluation.  [W]
     is the witness mark, new at taciturn M0:  the surface reads it from

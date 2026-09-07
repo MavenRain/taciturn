@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/level.mli, delta: this header line only *)
+(* carried from kanon c418062 lib/level.mli, delta: this header line only *)
 (** Universe levels. Abstract so a negative level cannot be built. *)
 
 type t

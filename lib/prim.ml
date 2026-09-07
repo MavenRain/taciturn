@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/prim.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/prim.ml, delta: this header line only *)
 (** The native primitive catalog at M0, plan section 6 and SB-D8.  Five
     primitives on the natural numbers, mirroring the closed enum of
     kan-lang-tot-pin/lib/prim.ml:20 with a much smaller row.
@@ -72,34 +72,26 @@ let ty (p : t) : Term.t =
     The surface has no negative integer token, so a negative literal can
     reach here only from a hand built term, and the answer is a stuck
     application, not a wrong number. *)
-let as_nat (l : Literal.t) : int option =
+let as_nat (l : Literal.t) : Bignum.t option =
   match l with
-  | Literal.LInt n -> if n < 0 then None else Some n
+  | Literal.LInt n -> if Bignum.sign n < 0 then None else Some n
   | Literal.LString _ -> None
 
-let overflow_msg : string =
-  "a natural literal leaves the host integer range;  arbitrary precision arrives at M1"
-
-let add (a : int) (b : int) : (int, Error.t) result =
-  if a > Stdlib.max_int - b then Error (Error.Overflow overflow_msg) else Ok (a + b)
+let add (a : Bignum.t) (b : Bignum.t) : (Bignum.t, Error.t) result =
+  Ok (Bignum.add a b)
 
 (** Truncated subtraction (SB-D4):  the naturals have no negative, so a
     larger subtrahend gives zero. *)
-let sub (a : int) (b : int) : (int, Error.t) result =
-  if a < b then Ok 0 else Ok (a - b)
+let sub (a : Bignum.t) (b : Bignum.t) : (Bignum.t, Error.t) result =
+  Ok (Bignum.sub a b)
 
-(** The guard of the second arm establishes a non zero divisor on its own
-    line, so the quotient is total there. *)
-let mul (a : int) (b : int) : (int, Error.t) result =
-  match () with
-  | () when Int.equal a 0 -> Ok 0
-  | () when (not (Int.equal a 0)) && b <= Stdlib.max_int / a (* @total-accessor *) ->
-      Ok (a * b)
-  | () -> Error (Error.Overflow overflow_msg)
+(** SK-D3: Zarith promotes the result before any machine integer wrap. *)
+let mul (a : Bignum.t) (b : Bignum.t) : (Bignum.t, Error.t) result =
+  Ok (Bignum.mul a b)
 
 (** The arithmetic row.  [None] marks a primitive whose answer is not a
     literal. *)
-let arith (p : t) : (int -> int -> (int, Error.t) result) option =
+let arith (p : t) : (Bignum.t -> Bignum.t -> (Bignum.t, Error.t) result) option =
   match p with
   | Nat_add -> Some add
   | Nat_sub -> Some sub
@@ -108,37 +100,39 @@ let arith (p : t) : (int -> int -> (int, Error.t) result) option =
   | Nat_lt -> None
 
 (** The comparison row, the other half of the same split. *)
-let compare_op (p : t) : (int -> int -> bool) option =
+let compare_op (p : t) : (Bignum.t -> Bignum.t -> bool) option =
   match p with
-  | Nat_eq -> Some Int.equal
-  | Nat_lt -> Some (fun (a : int) (b : int) -> a < b)
+  | Nat_eq -> Some Bignum.equal
+  | Nat_lt -> Some (fun (a : Bignum.t) (b : Bignum.t) -> Bignum.compare a b < 0)
   | Nat_add -> None
   | Nat_sub -> None
   | Nat_mul -> None
 
 (** The two arguments as naturals, when the application is saturated with
     two natural literals. *)
-let two_nats (args : Literal.t list) : (int * int) option =
+let two_nats (args : Literal.t list) : (Bignum.t * Bignum.t) option =
   Rules.two_of args
   |> Fun.flip Option.bind (fun ((x : Literal.t), (y : Literal.t)) ->
-         Option.bind (as_nat x) (fun (a : int) ->
-             Option.map (fun (b : int) -> (a, b)) (as_nat y)))
+         Option.bind (as_nat x) (fun (a : Bignum.t) ->
+             Option.map (fun (b : Bignum.t) -> (a, b)) (as_nat y)))
 
 let reduce (p : t) (args : Literal.t list) : (Literal.t option, Error.t) result =
   two_nats args
-  |> Option.fold ~none:None ~some:(fun ((a : int), (b : int)) ->
-         Option.map (fun (f : int -> int -> (int, Error.t) result) -> f a b) (arith p))
-  |> Option.fold ~none:(Ok None) ~some:(fun (r : (int, Error.t) result) ->
-         Result.map (fun (n : int) -> Some (Literal.LInt n)) r)
+  |> Option.fold ~none:None ~some:(fun ((a : Bignum.t), (b : Bignum.t)) ->
+         Option.map
+           (fun (f : Bignum.t -> Bignum.t -> (Bignum.t, Error.t) result) -> f a b)
+           (arith p))
+  |> Option.fold ~none:(Ok None) ~some:(fun (r : (Bignum.t, Error.t) result) ->
+         Result.map (fun (n : Bignum.t) -> Some (Literal.LInt n)) r)
 
 (** The whole fast path, literal answers and collection answers together.
     [None] leaves the application stuck. *)
 let apply (p : t) (args : Literal.t list) : (Value.t option, Error.t) result =
   let comparison : Value.t option =
     two_nats args
-    |> Fun.flip Option.bind (fun ((a : int), (b : int)) ->
+    |> Fun.flip Option.bind (fun ((a : Bignum.t), (b : Bignum.t)) ->
            Option.map
-             (fun (f : int -> int -> bool) -> Rules.bool_value (f a b))
+             (fun (f : Bignum.t -> Bignum.t -> bool) -> Rules.bool_value (f a b))
              (compare_op p))
   in
   reduce p args

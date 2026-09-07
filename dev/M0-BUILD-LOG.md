@@ -763,3 +763,86 @@ suite prints.  `zsh dev/dunecho.sh build` prints zero errors and zero warnings,
 `zsh dev/dune.sh runtest --force` passes every suite, and the row
 implementation stays at 700/700 lines.  The three gate ladders and the six
 emitted artifacts are rechecked after this review.
+
+
+## 2026-09-06 Stage K re-pin
+
+This slice replaces the interim Stage H pin under D-A-1 with committed
+kanon `c4180626123687858ff83408bab801c6f87e3e71`, M1 Stage K.  The base
+is taciturn `fd4940b0b0c71a4390165b23e2bbf915c929382b`, which already
+commits row validation.  The implementation and validation run in
+`/Users/oobi/Documents/gpt13/taciturn-next` before transfer to taciturn.
+
+The re-carry supplies arbitrary-precision Nat through Zarith 1.14, the
+shared term occurrence walk, positivity, guarded evaluation and the
+structural termination certificate.  The installed Zarith reports 1.14;
+dune-project records that dependency constraint as package metadata.
+The parser preserves arbitrary-precision literals and narrows structural
+indices explicitly.  Universe elaboration shares that bound, including
+hand-built syntax, and converts levels without repeated successor steps.
+
+The checker carries path-sensitive One usage through the rule packs.
+Linear keeps occurrence stamps separate from multiplicity: W stays a
+private, duplicable stamp, while One must be used exactly once on each
+returning runtime path.  W and Many consumers cannot take a One resource.
+Closure allocation, calls and eager let aliases account for free captures.
+Nonreturning branches may omit One but may not duplicate it.  The carry
+corrects an upstream interval merge that discarded nonreturning read
+maxima when another branch returned; the mixed-returning-paths regression
+and its mutation below cover that distinction.
+
+Witness readability, prove declassification, normalized extern linking,
+duplicate-global refusal and checked lambda domains remain enforced.
+Extern arguments contribute usage once.  The first integrated test run
+caught a lost actual-head domain check in conversion; that prior taciturn
+fix was restored before the final test run.  The new unreachable-body test
+was corrected to distinguish a nonreturning body from allocation of a
+returning closure, and it now tests both cases.
+
+The family-declaration surface remains deferred under D-B-2.  Stage C
+still owns Field p, the row backend and the two erasures.  This re-pin
+delivers their prerequisite and does not claim those features.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Build | PASS | `zsh dev/dunecho.sh build`, zero errors and warnings |
+| Full dune tests | PASS | `zsh dev/dunecho.sh test`, exit 0 |
+| Re-pin regression suite | PASS | `_build/default/test/repin/repin.exe`, 19/19 |
+| Mutation controls | PASS | Four compilable mutants, all rejected by the regression suite |
+| Stage A | PASS | SA-G1 through SA-G8, GATES-OK |
+| Stage B | PASS | SB-G1 through SB-G12, GATES-OK |
+| Stage 0 spikes | PASS | S0-G1 through S0-G11, including snarkjs ROUNDTRIP and circom DIFF |
+
+The 19 named regressions cover large Nat arithmetic and printing, negative
+kernel literals, valid large universes and invalid indices, forged syntax,
+linear branches, closures, aliases, witness boundaries, and the totality
+guard with its explicit budget failure.  A BN254-modulus square is compared
+with a fixed decimal oracle.  The prior kernel, extern, lowering and row
+validation tests run through the same dune alias.  Five additional review
+probes reject linear inputs through direct or aliased prove, closures passed
+to prove, verifyRaw, and a witness closure passed to a One consumer.
+
+All 22 carried files have measured origins and diff counts in CARRIED.md.
+The eight-file kernel totals 2991/3000 lines after comment compaction;
+quantity.ml is 72/90.  New carried support modules are reported separately:
+bignum.ml 52 lines, linear.ml 100, order.ml 511.  These modules are outside
+the historical eight-file cap, and no threshold was raised.  The exact
+house exclusion table has 54 comment or string rows and no executable
+banned-token match.  SA-G5 now requires the full new pin and exact vendor
+HEAD equality.  The banned-token patterns and other gate predicates remain
+unchanged.
+
+Evidence logs are under `/Users/oobi/Documents/gpt13/taciturn-repin-*`.
+Mutation trees and per-mutant build/test logs are under
+`/Users/oobi/Documents/gpt13/repin-mutants/`.  The row-validation mutation
+table in MUTATION-LOG.md now includes its previously omitted file column.
+
+The final spike ladder prints GATES-OK.  Its reader suite is 47/47;
+MiMC emits 12 constraints against circom O2's 12, ratio 1.0.  The timer
+gate passes at median 12.498 ms with the unchanged 20 ms bound.
+
+Hand-off: all 40 changed paths are staged in
+`/Users/oobi/Documents/taciturn`, including the vendor gitlink; no commit
+is made.  The source bytes are compared with the validated checkout and
+the final worktree must equal the index.  D-A-1 keeps Stage C after the
+user's re-pin commit.

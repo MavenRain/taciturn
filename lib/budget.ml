@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/budget.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/budget.ml, delta: this header line only *)
 (** M5 Stage C (verdict item 2, pin 8): the check budget, as the kernel
     sees it.
 

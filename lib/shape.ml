@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/shape.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/shape.ml, delta: this header line only *)
 (** The shape sum.  Plan section 4 declares it whole at Stage A and the
     later arms are refused by their milestone name (D-M0-2), so the closed
     grammar is visible in SPEC.md from the first commit.

@@ -1,0 +1,4 @@
+(test
+ (name repin)
+ (modules repin)
+ (libraries taciturn_kernel taciturn_surface))

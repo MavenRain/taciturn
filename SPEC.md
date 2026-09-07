@@ -12,7 +12,7 @@ three-round MiMC, whose row count stays within 1.25 of circom on the same
 MiMC.
 
 The kernel is unchanged.  Two formers, four schema constructors and five
-declared shapes at kanon de40d65 are two formers, four schema
+declared shapes at kanon c418062 are two formers, four schema
 constructors and five declared shapes here, and the R0 block below pins
 that.  A surface form is sugar over one kernel constructor and never a
 former, which the sugar table of section 4 shows row by row.
@@ -56,7 +56,7 @@ items   ::= '()' | '(' term (',' term)* ')'
 | `fun`, `let`, `->`, `*`, application | M0 | |
 | `tuple`, `sum`, `prod`, `inj`, `absurd`, `.k` | M0 | |
 | `Prop`, `Type n`, `()`, `auto`, `( : )` | M0 | |
-| `Field p`, `Bit`, `select` | M0 | declared at Stage A, checked at Stage B |
+| `Field p`, `Bit`, `select` | M0 | declared at Stage A, checked at Stage C |
 | `case ... with` | M1 | the collection elimination form |
 | `Fin (2^k)` | M1 | declared and refused with the name M1, correction C2 |
 | `mu` | M1 | reserved;  the parser refuses it with "mu arrives at M1" |
@@ -145,8 +145,14 @@ Stage A declares this rule and Stage B enforces it.  A refusal is
 The sum counts usage and it is not the normative rule above.  It checks
 the counted usage of a binder against its declared mark:  admissible in
 `{Zero}` at a `Zero` binder, in `{Zero, W}` at a `W` binder, in
-`{Zero, One}` at a `One` binder, and anywhere at a `Many` binder.
-`One + One = Many` at M0 counting, as kanon counts today.
+`{One}` on each returning runtime path at a `One` binder, and anywhere
+at a `Many` binder.  `One + One = Many`, so two reads on one path fail.
+The Stage K carry counts alternatives separately and requires exactly
+one read on each returning path.  An erased read does not discharge a
+linear binder.  A nonreturning path may omit it but may not duplicate it.
+Closure capture and let aliases retain the demands of their consumers.
+The witness sum remains idempotent, `W + W = W`; a W argument is
+duplicable and cannot consume a linear One binder.
 
 | plus | `Zero` | `W` | `One` | `Many` |
 | --- | --- | --- | --- | --- |
@@ -328,6 +334,12 @@ circuit reads all three.  A missing namespace is a link error at load
 time, which the Stage 0 spike shows.
 
 ## 9 Hand-off notes for Stage C
+
+The Stage K re-pin supplies arbitrary-precision Nat through Zarith 1.14.
+Natural literals and their arithmetic have no machine-integer bound.
+Universe levels, collection widths and projection indices still require
+checked machine integers; a value outside that range is a parse error.
+The family declaration surface stays deferred to M1 under D-B-2.
 
 The `RField` arm of delta 2 arrives at Stage C.  `lib/eterm.ml` is not
 carried at Stage B, because the Stage B row of the plan does not name it

@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/value.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/value.ml, delta: this header line only *)
 (** The NbE semantic domain, plan section 5.  Syntax uses de Bruijn
     indices, values use de Bruijn levels, and every closure keeps the
     environment it was built under.

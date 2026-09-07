@@ -39,7 +39,7 @@ type binder = {
 (* kanon de40d65 surface/syntax.ml:88-117 *)
 and t =
   | SVar of string
-  | SNat of int
+  | SNat of Bignum.t
   | SProp
   | SType of int
   | SUnit
@@ -113,7 +113,7 @@ and binder_text (b : binder) : string =
 and raw (s : t) : string =
   match s with
   | SVar x -> x
-  | SNat n -> string_of_int n
+  | SNat n -> Bignum.to_string n
   | SProp -> "Prop"
   | SType n -> "Type " ^ string_of_int n
   | SUnit -> "()"
@@ -190,14 +190,24 @@ let starts_atom (ts : Lexer.t list) : bool =
 (** The binder's mark, D-M0-3 and SPEC.md section 9.  "0" is the erased
     mark, "w" is the witness mark, "1" is the linear mark and an absent
     mark is the runtime one.  Total:  a token that is none of the three
-    leaves the list where it was.  kanon de40d65
-    surface/parser.ml:65-70. *)
+    leaves the list where it was.  kanon c418062
+    surface/parser.ml:67-73, with the taciturn witness arm. *)
 let mark_prefix (ts : Lexer.t list) : Quantity.t * Lexer.t list =
   match ts with
-  | { Lexer.kind = Lexer.Nat 0; loc = _ } :: rest -> (Quantity.Zero, rest)
+  | { Lexer.kind = Lexer.Nat n; loc = _ } :: rest when Bignum.equal n Bignum.zero ->
+      (Quantity.Zero, rest)
   | { Lexer.kind = Lexer.KWMark; loc = _ } :: rest -> (Quantity.W, rest)
-  | { Lexer.kind = Lexer.Nat 1; loc = _ } :: rest -> (Quantity.One, rest)
+  | { Lexer.kind = Lexer.Nat n; loc = _ } :: rest when Bignum.equal n Bignum.one ->
+      (Quantity.One, rest)
   | ({ Lexer.kind = _; loc = _ } :: _ | []) as same -> (Quantity.Many, same)
+
+(* kanon c418062 surface/parser.ml:75-81.  Only Nat payloads are
+   unbounded; levels and leg numbers retain the eighteen-digit bound. *)
+let bounded_nat (loc : Lexer.loc) (n : Bignum.t) : (int, Error.t) result =
+  if Bignum.sign n < 0 || String.length (Bignum.to_string n) > 18 then
+    parse_err loc "numeric literal too long"
+  else Bignum.to_int n
+    |> Option.to_result ~none:(Error.Parse ("numeric literal too long", loc.Lexer.line, loc.Lexer.col))
 
 (* kanon de40d65 surface/parser.ml:71-78 *)
 let rec parse_term (ts : Lexer.t list) : (t * Lexer.t list, Error.t) result =
@@ -327,13 +337,15 @@ and parse_app (ts : Lexer.t list) : (t * Lexer.t list, Error.t) result =
       let* head, rest = parse_atom ts in
       parse_app_rest head rest
 
-(* kanon de40d65 surface/parser.ml:288-296 *)
+(* kanon c418062 surface/parser.ml:300-312, checked shape index narrowing. *)
 and parse_inj (ts : Lexer.t list) : (t * Lexer.t list, Error.t) result =
   match ts with
-  | { Lexer.kind = Lexer.Nat k; loc = _ }
+  | { Lexer.kind = Lexer.Nat k; loc = kloc }
     :: { Lexer.kind = Lexer.KOf; loc = _ }
-    :: { Lexer.kind = Lexer.Nat n; loc = _ }
+    :: { Lexer.kind = Lexer.Nat n; loc = nloc }
     :: rest ->
+      let* k = bounded_nat kloc k in
+      let* n = bounded_nat nloc n in
       let* a, rest2 = parse_app rest in
       Ok (SInj (k, n, a), rest2)
   | ({ Lexer.kind = _; loc = _ } :: _ | []) -> expected "'K of N' after 'inj'" ts
@@ -354,7 +366,9 @@ and parse_atom (ts : Lexer.t list) : (t * Lexer.t list, Error.t) result =
 
 and parse_postfix (a : t) (ts : Lexer.t list) : (t * Lexer.t list, Error.t) result =
   match ts with
-  | { Lexer.kind = Lexer.Dot; loc = _ } :: { Lexer.kind = Lexer.Nat k; loc = _ } :: rest ->
+  | { Lexer.kind = Lexer.Dot; loc = _ } :: { Lexer.kind = Lexer.Nat k; loc } :: rest ->
+      (* kanon c418062 surface/parser.ml:332-334 *)
+      let* k = bounded_nat loc k in
       parse_postfix (SProj (a, k)) rest
   | { Lexer.kind = Lexer.Dot; loc } :: _rest -> parse_err loc "expected a leg number after '.'"
   | ({ Lexer.kind = _; loc = _ } :: _ | []) -> Ok (a, ts)
@@ -365,7 +379,9 @@ and parse_atom_head (ts : Lexer.t list) : (t * Lexer.t list, Error.t) result =
   | { Lexer.kind = Lexer.Ident x; loc = _ } :: rest -> Ok (SVar x, rest)
   | { Lexer.kind = Lexer.Nat n; loc = _ } :: rest -> Ok (SNat n, rest)
   | { Lexer.kind = Lexer.KProp; loc = _ } :: rest -> Ok (SProp, rest)
-  | { Lexer.kind = Lexer.KType; loc = _ } :: { Lexer.kind = Lexer.Nat n; loc = _ } :: rest ->
+  | { Lexer.kind = Lexer.KType; loc = _ } :: { Lexer.kind = Lexer.Nat n; loc } :: rest ->
+      (* kanon c418062 surface/parser.ml:345-347 *)
+      let* n = bounded_nat loc n in
       Ok (SType n, rest)
   | { Lexer.kind = Lexer.KType; loc = _ } :: rest -> Ok (SType 0, rest)
   | { Lexer.kind = Lexer.KAuto; loc = _ } :: rest -> Ok (SAuto, rest)

@@ -1,12 +1,11 @@
 # Carried files
 
-Every file below comes from the kanon clone under vendor/kanon at the pin
-de40d65, which PIN names.  The pin is interim under D-A-1:  kanon Stage K
-moves the kernel that these files sit in, so Stage K forces the re-carry
-of section 1 of the M0 plan at the new sha, and every row here is
-recomputed then.  The first line of each carried file states the delta and
-dev/carry-check.sh re-diffs the file against the pin, so a silent edit to
-a carried file fails the CARRY gate.
+The pin is kanon Stage K, `c4180626123687858ff83408bab801c6f87e3e71`,
+as recorded in PIN and the vendor/kanon gitlink.  This replaces the interim
+Stage H pin under D-A-1.  The carry includes bignum Nat, path-sensitive One
+usage, and the dependencies of the Stage K positivity and totality guards.
+Each header names its origin and delta.  dev/carry-check.sh re-diffs every
+row, so any subsequent carry edit requires a matching count update.
 
 The count is the line count of `diff` between
 `git -C vendor/kanon show ORIGIN` and the file.  A file whose only delta
@@ -15,66 +14,66 @@ its own, because the diff holds the range line, the old line, the marker
 and the new line, and counts 2 when the pin has no header line, because
 the diff holds the range line and the new line alone.
 
-Six files carry a delta beyond the header.  lib/quantity.ml holds the
-fourth mark W of section 4 of M0-PLAN.md, its five mul arms, its six equal
-arms, its to_string arm and the prose that states the table.
-lib/global.ml holds the Extern kind of Stage B, its entry record with the
-per-argument quantity signature, and the arity and mark checks that link a foreign
-implementation against the disclosure ledger.  lib/error.ml holds the two
-extern arms of Stage B brief 3.3 and the two arms of brief 3.5, Usage for
-the sum of SPEC.md section 3.2 and Extern_clash for a definition that
-carries a ledger name.  lib/check.ml holds the occurrence rule of the
-brief section 4 at one site, the extern point walk, the declassifier, the
-call into the usage sum and the D-B-2 drop below.  The review adds duplicate
-global rejection, normalized postulate linking and domain-directed extern
-argument checking.  lib/rules.ml validates lambda domains and reads binder
-marks through annotations.  lib/conv.ml reads application argument types
-from the actual head during conversion.
+The local deltas retain witness W and the disclosed Extern kind.
+lib/quantity.ml keeps the four marks and sixteen-arm tables.  The path
+usage machinery is extracted from the same upstream module into
+lib/linear.ml, with independent occurrence stamps and multiplicity counts.
+W remains a private stamp and is duplicable; a One argument cannot enter
+a W consumer.  This separation lets a witness-mode closure bind its own
+linear argument without making that argument duplicable.
+
+lib/check.ml keeps the witness occurrence rule, prove declassification,
+normalized postulate linking and duplicate-global refusal.  The Stage K
+checker threads usage through the rule packs.  lib/rules.ml keeps checked
+lambda domains and annotation-aware binder marks, and directs extern
+argument checking through a ledger hook without counting an argument twice.
+lib/conv.ml keeps actual-head domain checks during spine conversion.
+lib/global.ml retains Extern and its signature checks.  lib/error.ml keeps
+the four taciturn-specific errors alongside the Stage K termination error.
 
 | file | origin | diff lines |
 | --- | --- | --- |
-| lib/budget.ml | de40d65:lib/budget.ml | 4 |
-| lib/check.ml | de40d65:lib/check.ml | 325 |
-| lib/conv.ml | de40d65:lib/conv.ml | 14 |
-| lib/error.ml | de40d65:lib/error.ml | 32 |
-| lib/eval.ml | de40d65:lib/eval.ml | 2 |
-| lib/global.ml | de40d65:lib/global.ml | 78 |
-| lib/level.ml | de40d65:lib/level.ml | 4 |
-| lib/literal.ml | de40d65:lib/literal.ml | 4 |
-| lib/positivity.ml | de40d65:lib/positivity.ml | 2 |
-| lib/pp.ml | de40d65:lib/pp.ml | 2 |
-| lib/prim.ml | de40d65:lib/prim.ml | 2 |
-| lib/quantity.ml | de40d65:lib/quantity.ml | 66 |
-| lib/rules.ml | de40d65:lib/rules.ml | 53 |
-| lib/shape.ml | de40d65:lib/shape.ml | 2 |
-| lib/term.ml | de40d65:lib/term.ml | 2 |
-| lib/totality.ml | de40d65:lib/totality.ml | 2 |
-| lib/value.ml | de40d65:lib/value.ml | 2 |
-| lib/budget.mli | de40d65:lib/budget.mli | 4 |
-| lib/level.mli | de40d65:lib/level.mli | 4 |
+| lib/bignum.ml | c418062:lib/bignum.ml | 2 |
+| lib/budget.ml | c418062:lib/budget.ml | 4 |
+| lib/budget.mli | c418062:lib/budget.mli | 4 |
+| lib/check.ml | c418062:lib/check.ml | 413 |
+| lib/conv.ml | c418062:lib/conv.ml | 43 |
+| lib/error.ml | c418062:lib/error.ml | 49 |
+| lib/eval.ml | c418062:lib/eval.ml | 2 |
+| lib/global.ml | c418062:lib/global.ml | 78 |
+| lib/level.ml | c418062:lib/level.ml | 4 |
+| lib/level.mli | c418062:lib/level.mli | 4 |
+| lib/linear.ml | c418062:lib/quantity.ml | 195 |
+| lib/literal.ml | c418062:lib/literal.ml | 2 |
+| lib/order.ml | c418062:lib/order.ml | 2 |
+| lib/positivity.ml | c418062:lib/positivity.ml | 2 |
+| lib/pp.ml | c418062:lib/pp.ml | 2 |
+| lib/prim.ml | c418062:lib/prim.ml | 2 |
+| lib/quantity.ml | c418062:lib/quantity.ml | 180 |
+| lib/rules.ml | c418062:lib/rules.ml | 396 |
+| lib/shape.ml | c418062:lib/shape.ml | 2 |
+| lib/term.ml | c418062:lib/term.ml | 2 |
+| lib/totality.ml | c418062:lib/totality.ml | 2 |
+| lib/value.ml | c418062:lib/value.ml | 2 |
 
 ## The D-B-2 drops
 
-D-B-2 caps the eight kernel files shape.ml, term.ml, rules.ml, check.ml,
-value.ml, eval.ml, conv.ml and totality.ml at 3000 lines.  The initial carry
-lands at 2995, and the review lands at 2987 by compacting comments without
-dropping kernel logic.  lib/check.ml drops the
-inductive family declaration of the pin, 190 lines in two type
-declarations and seven definitions:  family_decl, ctor_decl,
+The eight kernel files shape.ml, term.ml, rules.ml, check.ml, value.ml,
+eval.ml, conv.ml and totality.ml retain their combined 3000-line cap.
+The Stage B family-declaration omission remains: family_decl, ctor_decl,
 check_telescope, index_rules, check_index_telescope, declare_family,
-parameter_at, check_ctor and define_ctors.  The 190 measures the family
-declaration block removed by Stage B.  Review changes additionally condense
-the introductory comments in check.ml and several comments in rules.ml.
-No further kernel definitions are removed.  The dropped block declares families and their
-constructors, which the closed grammar of SPEC.md section 2 does not
-reach at M0, so no surface form of Stage B needs it;  M1 carries it back
-at the Stage K pin when the family syntax lands, and the count above is
-the size of the re-carry.
+parameter_at, check_ctor and define_ctors.  The closed M0 surface cannot
+declare families; M1 restores that path.  The Stage K re-carry compacts
+comments to fit the same cap without dropping additional checking logic.
 
-lib/spec_count.ml, lib/disclosure.ml, lib/link.ml and lib/usage.ml are not
-carried:  they are taciturn's own files and they hold no carry header, so
-carry-check.sh wants no row for them.
+lib/order.ml carries the structural termination certificate algorithm.
+It is outside that historical eight-file count, as are the carried bignum
+boundary and the extracted linear-usage algebra.  Their line counts are
+reported separately in the re-pin build log.  The M0 declaration checker
+still does not admit recursive declarations.
 
-surface/lexer.ml, surface/parser.ml and surface/elab.ml are carried as
-algorithm, not byte for byte, so they hold no carry header and no row.
-Each mirrored function cites its kanon line above the definition.
+lib/spec_count.ml, lib/disclosure.ml, lib/link.ml and lib/usage.ml are
+taciturn-specific modules.  Surface files are carried as algorithms and
+cite the upstream definitions beside each mirrored function.  Their Nat
+changes preserve arbitrary-precision literals while explicitly narrowing
+universe levels, collection widths and projection indices.

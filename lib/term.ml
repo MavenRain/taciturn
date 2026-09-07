@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/term.ml, delta: this header line only *)
+(* carried from kanon c418062 lib/term.ml, delta: this header line *)
 (** The kernel term at M0, plan section 4.  Thirteen constructors;  two of
     them form types.  The whole sum is declared at Stage A and every
     constructor past M0 is refused by rules.ml or by check.ml with its
@@ -91,3 +91,44 @@ let as_actor (a : addr) : string option =
   | ACtor c -> Some c
   | APt (_, _) -> None
   | ALeg _ -> None
+
+(** Shared exhaustive occurrence walk for structural order and strict
+    positivity.  Both count globals and shape payloads; [include_families]
+    also counts the name carried by a recursive shape.  Shape, address,
+    scrutinee, motive and branch positions retain their short-circuit order. *)
+let exists_name ~(include_families : bool) (names : string list) (term : t) : bool =
+  let member (name : string) : bool = List.exists (String.equal name) names in
+  let rec occurs (tm : t) : bool =
+    match tm with
+    | Var _ | Univ _ | Lit _ | Auto -> false
+    | Global name -> member name
+    | Lan (s, d) -> occurs_shape s || occurs d
+    | Ran (s, d) -> occurs_shape s || occurs d
+    | In (s, a, args) ->
+        occurs_shape s || occurs_addr a || List.exists occurs args
+    | Sec (s, legs) -> occurs_shape s || List.exists occurs_leg legs
+    | Out (s, a, head) -> occurs_shape s || occurs_addr a || occurs head
+    | Elim e ->
+        occurs_shape e.e_shape
+        || occurs e.e_scrut
+        || occurs_motive e.e_motive
+        || List.exists
+             (fun ((a : addr), (lg : leg)) -> occurs_addr a || occurs_leg lg)
+             e.e_branches
+    | Let (_, ty, def, body) -> occurs ty || occurs def || occurs body
+    | Ann (tm, ty) -> occurs tm || occurs ty
+  and occurs_shape (s : t Shape.t) : bool =
+    (* A type at a family is a former at the recursive shape, so the name
+       the shape carries is an occurrence (shape.ml [family]). *)
+    (include_families
+    && Option.fold ~none:false ~some:member (Shape.family s))
+    || List.exists occurs (Shape.payload s)
+  and occurs_addr (a : addr) : bool =
+    as_apt a
+    |> Option.fold ~none:false ~some:(fun ((_q : Quantity.t), (arg : t)) ->
+           occurs arg)
+  and occurs_leg (lg : leg) : bool = occurs lg.l_body
+  and occurs_motive (mo : motive option) : bool =
+    mo |> Option.fold ~none:false ~some:(fun (m : motive) -> occurs m.m_body)
+  in
+  occurs term

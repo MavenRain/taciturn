@@ -67,7 +67,7 @@ type kind =
   | KMu
   | KNu
   | Ident of string
-  | Nat of int
+  | Nat of Bignum.t
   | Eof
 
 type t = {
@@ -107,7 +107,7 @@ let describe (k : kind) : string =
   | KMu -> "'mu'"
   | KNu -> "'nu'"
   | Ident s -> Printf.sprintf "identifier %s" s
-  | Nat n -> Printf.sprintf "number %d" n
+  | Nat n -> "number " ^ Bignum.to_string n
   | Eof -> "end of input"
 
 let lex_err (l : loc) (msg : string) : ('a, Error.t) result =
@@ -145,9 +145,10 @@ let rec span (p : char -> bool) (l : loc) (cs : char list) : char list * loc * c
       (c :: taken, l2, rest2)
   | ([] | _ :: _) as same -> ([], l, same)
 
-(* kanon de40d65 surface/lexer.ml:74-75 *)
-let nat_of_digits (digits : char list) : int =
-  List.fold_left (fun (acc : int) (c : char) -> (acc * 10) + (Char.code c - Char.code '0')) 0 digits
+(* kanon c418062 surface/lexer.ml:76-79, Stage K arbitrary precision. *)
+let nat_of_digits (l : loc) (digits : char list) : (Bignum.t, Error.t) result =
+  List.to_seq digits |> String.of_seq |> Bignum.of_decimal
+  |> Option.to_result ~none:(Error.Parse ("invalid natural literal", l.line, l.col))
 
 (** The walk.  kanon de40d65 surface/lexer.ml:91-127, arm by arm. *)
 let rec go (l : loc) (cs : char list) (acc : t list) : (t list, Error.t) result =
@@ -169,9 +170,9 @@ let rec go (l : loc) (cs : char list) (acc : t list) : (t list, Error.t) result 
   | c :: rest when is_digit c ->
       let taken, l2, rest2 = span is_digit (next_col l) rest in
       let digits = c :: taken in
-      (* eighteen digits always fit a 63-bit int;  a longer run would wrap *)
-      if List.length digits > 18 then lex_err l "numeric literal too long"
-      else go l2 rest2 ({ kind = Nat (nat_of_digits digits); loc = l } :: acc)
+      (* kanon c418062 surface/lexer.ml:120-124 *)
+      Result.bind (nat_of_digits l digits) (fun n ->
+        go l2 rest2 ({ kind = Nat n; loc = l } :: acc))
   | c :: rest when is_ident_start c ->
       let taken, l2, rest2 = span is_ident_char (next_col l) rest in
       let s = List.to_seq (c :: taken) |> String.of_seq in

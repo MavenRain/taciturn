@@ -1,4 +1,4 @@
-(* carried from kanon de40d65 lib/global.ml, delta: this header line, and the Extern entry of M0-PLAN section 4 delta 3 with its per-argument quantity signature, its view, find_extern, the arity and mark checks and the kind list of D-M0-4 *)
+(* carried from kanon c418062 lib/global.ml, delta: this header line, and the Extern entry of M0-PLAN section 4 delta 3 with its per-argument quantity signature, its view, find_extern, the arity and mark checks and the kind list of D-M0-4 *)
 (* carried from tot 8cf0b8b lib/global.ml, delta: header line; the Ind and Ctor entries with their views are dropped because the recursive shapes arrive at M1; the Prim entry is re-adapted at Stage B with prim_of, find_prim and initial *)
 (** Global environment. [add] is kernel-internal: the only sound ways to
     extend the environment are [Check.define], [Check.declare_ind] and

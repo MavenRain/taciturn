@@ -223,12 +223,12 @@ _build/default/spike/row-tests/validation.exe` then exited 1 in each copy.
 The original checkout was not mutated.  Build and test evidence remains in
 each copy's `build.log` and `test.log`.
 
-| Id | NAME and edit | First failing row | Result |
-| --- | --- | --- | --- |
-| S0-RV-M1 | lower-validation: omit `Row.validate` in `Lower.lower` | `zero-wire-count accepted` | KILLED |
-| S0-RV-M2 | lookup-tag: accept nonzero lookup tags | `row-lookup-before-finish accepted` | KILLED |
-| S0-RV-M3 | duplicate-binding: remove the duplicate binding branch | `duplicate-same-value expected=duplicate-binding:1 got=missing-binding:3` | KILLED |
-| S0-RV-M4 | missing-operands: omit operand tracking in `mul` and `lin` | `mul-read-before-bind accepted` | KILLED |
+| Id | File | NAME and edit | First failing row | Result |
+| --- | --- | --- | --- | --- |
+| S0-RV-M1 | spike/rows/lower.ml | lower-validation: omit `Row.validate` in `Lower.lower` | `zero-wire-count accepted` | KILLED |
+| S0-RV-M2 | spike/rows/row.ml | lookup-tag: accept nonzero lookup tags | `row-lookup-before-finish accepted` | KILLED |
+| S0-RV-M3 | spike/rows/row.ml | duplicate-binding: remove the duplicate binding branch | `duplicate-same-value expected=duplicate-binding:1 got=missing-binding:3` | KILLED |
+| S0-RV-M4 | spike/rows/row.ml | missing-operands: omit operand tracking in `mul` and `lin` | `mul-read-before-bind accepted` | KILLED |
 
 S0-RV-M3 checks the explicit diagnostic contract: other structural guards
 still reject that mutant's duplicate witness.  The other three mutants
@@ -241,3 +241,24 @@ checks that neither create nor overwrite artifacts on rejection.
 The review of the row validation slice added three rejection cases to the row
 suite, so the count above states 41 and not the 38 of the first run.  No
 mutant copy changed and no row of the table above changed.
+
+
+## 2026-09-06 Stage K re-pin
+
+Each mutation runs on a separate source copy under
+`/Users/oobi/Documents/gpt13/repin-mutants/NAME`.  Each copy builds with
+`zsh dev/dunecho.sh build`, exit 0, before its re-pin regression executable
+exits 1.  The original tree passes 19/19.  The reproducible driver is
+`/Users/oobi/Documents/gpt13/repin-mutations.py`; each copy retains build.log
+and test.log.  No mutation was made in the final repository.
+
+| Id | File | NAME and edit | Caught by | Result |
+| --- | --- | --- | --- | --- |
+| RK-M1 | lib/bignum.ml | nat-wrap: mask addition to the machine integer range | large-nat-computation reports the wrong modulus | KILLED |
+| RK-M2 | lib/check.ml | unused-one: replace exactly-once discharge with at-most-once | one-unused accepts an invalid program | KILLED |
+| RK-M3 | lib/check.ml | witness-leak: allow W at One and Many stamps | witness-rules accepts an invalid program | KILLED |
+| RK-M4 | lib/linear.ml | nonreturning-reads: omit dead-path read maxima when a path returns | mixed-returning-paths accepts an invalid program | KILLED |
+
+RK-M4 places the One binder immediately around the mixed elimination.
+This avoids an intervening closure-capture merge hiding the missing read
+maximum, so the regression directly distinguishes the interval correction.
