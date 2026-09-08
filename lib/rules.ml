@@ -1,4 +1,4 @@
-(* carried from kanon c418062 lib/rules.ml, delta: binder_marks, checked lambda domains, separate witness and linear modes, extern argument hook, and compacted comments *)
+(* carried from kanon c418062 lib/rules.ml, delta: binder_marks, checked lambda domains, separate witness and linear modes, extern argument hook, shared dependent projection motives, and compacted comments *)
 (** Shape rules have one dispatch point, shared by the checker and
     conversion. Every shape match is exhaustive. Former rules accept an
     expected universe for empty collections (SB-D6); eta rules expose both
@@ -587,32 +587,34 @@ let spi_eta_ran (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.cl
 (** The projection branch of D-M0-3:  one branch at the leg address,
     binding the point and the fibre element, whose body is the binder
     the projection selects. *)
-let proj_branch (q : Quantity.t) (which : int) : (Term.addr * Term.leg) list =
+let proj_branch (q : Quantity.t) (x : string) (which : int) : (Term.addr * Term.leg) list =
   [
     ( Term.ALeg 0,
       {
-        Term.l_binders = [ (q, "x"); (Quantity.Many, "y") ];
+        Term.l_binders = [ (q, x); (Quantity.Many, "y") ];
         l_body = Term.Var (if Int.equal which 0 then 1 else 0);
       } );
   ]
 
-(** Eta and surface projections must freeze identical motives (SB-D38):
-    the domain for the first projection and the fibre at it for the second. *)
-let proj_motive (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.closure)
+(** Eta and surface projections share inferable motives, including the
+    first projection under the second projection's self binder (SB-D38). *)
+let rec proj_motive (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.closure)
     (q : Quantity.t) (x : string) (dom_v : Value.t) (which : int) :
     (Term.motive option, Error.t) result =
   let ev = ops.o_ev ctx in
   let size = ops.o_size ctx in
+  let self_ctx = ops.o_bind "self" Quantity.Zero (Value.VLan (s, dclo, None)) ctx in
   let* body_v =
     if Int.equal which 0 then Ok dom_v
     else
+      let* first_motive = proj_motive ops self_ctx s dclo q x dom_v 0 in
       let* point =
-        elim_with spi_beta ev s q None (proj_branch q 0) (ops.o_env ctx)
+        elim_with spi_beta ev s Quantity.One first_motive (proj_branch q x 0) (ops.o_env self_ctx)
           (Value.var size)
       in
       open_closure ev dclo [ point ]
   in
-  let* m_body = ops.o_quote (ops.o_bind x q dom_v ctx) body_v in
+  let* m_body = ops.o_quote self_ctx body_v in
   Ok (Some { Term.m_ind = None; m_idx = []; m_self = "self"; m_body })
 
 (** Pair eta compares each projection at scrutinee mark One, matching
@@ -625,14 +627,14 @@ let spi_eta_lan (ops : 'c ops) (ctx : 'c) (s : Value.t Shape.t) (dclo : Value.cl
   let ev = ops.o_ev ctx in
   let env = ops.o_env ctx in
   let* mo_first = proj_motive ops ctx s dclo q x dom_v 0 in
-  let* a1 = elim_with spi_beta ev s Quantity.One mo_first (proj_branch q 0) env a in
-  let* b1 = elim_with spi_beta ev s Quantity.One mo_first (proj_branch q 0) env b in
+  let* a1 = elim_with spi_beta ev s Quantity.One mo_first (proj_branch q x 0) env a in
+  let* b1 = elim_with spi_beta ev s Quantity.One mo_first (proj_branch q x 0) env b in
   let* first = ops.o_conv ctx ~ty:dom_v a1 b1 in
   if first then
     let* cod = open_closure ev dclo [ a1 ] in
     let* mo_second = proj_motive ops ctx s dclo q x dom_v 1 in
-    let* a2 = elim_with spi_beta ev s Quantity.One mo_second (proj_branch q 1) env a in
-    let* b2 = elim_with spi_beta ev s Quantity.One mo_second (proj_branch q 1) env b in
+    let* a2 = elim_with spi_beta ev s Quantity.One mo_second (proj_branch q x 1) env a in
+    let* b2 = elim_with spi_beta ev s Quantity.One mo_second (proj_branch q x 1) env b in
     ops.o_conv ctx ~ty:cod a2 b2
   else Ok false
 

@@ -846,3 +846,122 @@ Hand-off: all 40 changed paths are staged in
 is made.  The source bytes are compared with the validated checkout and
 the final worktree must equal the index.  D-A-1 keeps Stage C after the
 user's re-pin commit.
+
+## 2026-09-07 Aggregate elaboration
+
+The base is `a93ec9b`, which commits the Stage K re-pin and satisfies
+D-A-1's prerequisite.  This slice implements the aggregate surface forms
+already listed in SPEC.md: dependent pairs, tuples, sums, products,
+projections, injections and empty elimination.  Field p, Bit, the flat
+fragment, the production row backend and the two erasures stay in Stage C
+as M0-PLAN.md defines it.  This slice is not a Stage C exit.
+
+The elaborator carries the aggregate algorithms from kanon `c418062` and
+threads expected types through declarations, annotations, applications,
+lets, lambda codomains and nested introductions.  Pair projections retain
+their quantities and dependent motives.  Injection tags and widths are
+checked before inspecting the selected expected leg; an explicit width
+never allocates a list proportional to that number.
+
+Before evaluating source types or dependent values, elaboration asks the
+kernel to check them.  Value prechecks run at Zero, leaving runtime witness
+occurrences and linear discharge to the final checking pass.  This rejects
+an ill-typed self application before eager let evaluation can diverge.
+Only the let definition precheck at surface/elab.ml line 390 is reachable
+by a diverging M0 program.  The prechecks at the annotation, the pair
+point, the lambda domain, the group domain and the declaration type are
+defence in depth, no M0 program distinguishes them, and no test covers
+them.  The supplied declaration budget now reaches these elaboration
+prechecks.
+
+The first integrated run exposed a missing motive inside the dependent
+second projection's type.  Independent review then reproduced a valid
+dependent pair eta program rejected by conversion.  Both paths now call
+Rules.proj_motive, whose nested first projection has an explicit motive
+quoted under both self binders.  Positive eta and distinct-pair rejection
+tests cover the shared helper.  Review of the final helper found a frozen
+elimination inside a pair fibre whose motive read back one binder too
+deep.  The readback now re-indexes that motive and
+test/check/c04-frozen-motive-projection.tac covers it.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Build | PASS | `zsh dev/dunecho.sh build`, zero errors and warnings |
+| Full dune tests | PASS | `zsh dev/dune.sh runtest --force`, exit 0 |
+| Aggregate regressions | PASS | `test/aggregate/aggregate.exe`, 52/52 |
+| CLI regressions | PASS | `test/aggregate/check.mjs`, 4/4, five-second subprocess bound; the three rejection cases all stop at the let definition precheck, and the fourth accepts a 120 deep projection chain |
+| Kernel fixtures | PASS | PARSE 13/13, CHECK 15/15, NEG 23/23 |
+| Re-pin regressions | PASS | REPIN 19/19 |
+| Mutation checks | PASS | Four behavior-changing mutants killed; one equivalent environment mutation disclosed in MUTATION-LOG.md |
+| Stage A | PASS | SA-G1 through SA-G8, GATES-OK |
+| Stage B | PASS | SB-G1 through SB-G12, GATES-OK |
+| Stage 0 spikes | PASS | S0-G1 through S0-G11, GATES-OK |
+
+The spike run includes snarkjs ROUNDTRIP, circom DIFF at 12/12 rows,
+47/47 blind reader checks, and S0-G11 at median 16.405 ms against the
+unchanged 20 ms bound.  The row validation and emission regressions pass
+through the full dune alias.
+
+The eight-file kernel is 2998/3000 lines, seven more than the base.
+Rules.ml's carry diff is 430 lines and eval.ml's is 30; all 22 carry rows
+pass.  The exact house exclusion table contains 53 comment or string rows
+and no executable banned-token match.  R0 counts and every gate predicate
+stay unchanged.  README.md and SPEC.md describe the implemented surface
+slice.
+
+Implementation and validation ran in
+`/Users/oobi/Documents/gpt13/taciturn-stage-c`.  Evidence logs use the
+prefix `/Users/oobi/Documents/gpt13/taciturn-aggregate-`; mutation copies
+live under `/Users/oobi/Documents/gpt13/aggregate-mutants`.  The validated
+diff transfers to `/Users/oobi/Documents/taciturn` and is staged there.
+The commit is left to the user.
+
+### Review, 2026-09-08
+
+The review of this slice returned seven findings.  All seven are applied.
+
+- elab-1, HIGH, test/aggregate/check.mjs:21.  All three CLI cases open with
+  the same ill-typed let, so each one stops at the let definition precheck
+  and two of them passed with the check their name promised absent.  The
+  two names now say what runs, the three assertions stand unchanged, and
+  the paragraph above records which precheck a diverging M0 program can
+  reach.
+- kernel-1, MEDIUM, lib/rules.ml:617.  proj_motive quotes the projection
+  motive as a value and lib/eval.ml copied the motive term of a frozen
+  elimination verbatim, so a stuck projection inside a pair fibre read its
+  motive one binder too deep and a valid dependent pair program was refused
+  with a universe error.  Eval.quote_neutral now evaluates that motive
+  under a fresh self binder and quotes it at the readback size, and
+  test/check/c04-frozen-motive-projection.tac holds the refused program.
+- probe-1, MEDIUM, surface/elab.ml:251.  elab_proj re-inferred the whole
+  scrutinee prefix at every level, so a chain of pair projections cost
+  about the fourth power of its depth and the review measured 24 seconds
+  on a 2.3 KB well-typed file, past the five second CLI bound of this
+  repository.  elab_scrut carries the type of a scrutinee upward and
+  proj_typed returns the type each row already holds, so that same file
+  now checks in 1.33 seconds and a depth 120 chain in 0.52 seconds, which
+  the new accepting CLI case measures under the unchanged bound.
+- elab-2, LOW, surface/elab.ml:95.  leg_expectations fell back to no
+  expectation when the expected type was not a collection of the source
+  width, so a tuple width mismatch was reported as a nested pair with no
+  expected type.  It now refuses the former and the width the way
+  injection_expectation does, and the row tuple-width-nested-pair holds
+  the case.
+- elab-3, LOW, surface/elab.ml:105.  The injection range refusal re-spelled
+  the kernel's leg message as a literal, so the two paths could drift
+  apart without failing a test.  The surface row now reads Rules.leg_msg.
+- probe-3, LOW, surface/elab.ml:260.  A projection refusal named the
+  hardcoded branch binder x, which no source program contains.
+  Rules.proj_branch takes the binder name of the source pair, and the row
+  pair-projection-binder-name compares the whole diagnostic.
+- docs-1, LOW, README.md:20.  README.md, SPEC.md and this log called the
+  slice Stage C, although M0-PLAN.md defines Stage C as Field p, the
+  fragment and the rows.  The three documents now name the work aggregate
+  elaboration and place Stage C ahead of it.
+
+No finding is skipped.  The eight-file kernel stands at 2998 of 3000
+lines, lib/rules.ml carries 430 diff lines and lib/eval.ml 30, the house
+exclusion table holds 53 rows, and dev/carry-check.sh prints CARRY-OK over
+22 rows.  `zsh dev/dune.sh runtest --force` exits 0 with AGGREGATE 52/52,
+AGGREGATE-CLI 4/4, PARSE-OK 13/13, CHECK-OK 15/15, NEG-OK 23/23 and
+REPIN 19/19, and `zsh dev/stage-a-gates.sh` prints GATES-OK.

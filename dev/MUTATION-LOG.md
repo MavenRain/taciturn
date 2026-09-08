@@ -262,3 +262,53 @@ and test.log.  No mutation was made in the final repository.
 RK-M4 places the One binder immediately around the mixed elimination.
 This avoids an intervening closure-capture merge hiding the missing read
 maximum, so the regression directly distinguishes the interval correction.
+
+## 2026-09-07 Aggregate elaboration
+
+The unmodified aggregate suite passes 50/50 and its CLI companion passes
+3/3.  Those are the counts of the suite as it stood at this run.  The
+review of 2026-09-08 added two suite rows and one CLI case, so a rerun of
+the same copies against the current suite would report other totals.
+Each mutation below runs on a separate source copy under
+`/Users/oobi/Documents/gpt13/aggregate-mutants/NAME`.  Every copy first
+builds with zero errors and warnings.  The four behavior-changing copies
+then exit 1 on the named regression.  The original tree is never mutated.
+
+| Id | File | NAME and edit | Caught by | Result |
+| --- | --- | --- | --- | --- |
+| SC-A-M1 | surface/elab.ml | pair-legs: exchange the first and second pair projection | pair-projections evaluates first to 7 instead of 3 | KILLED |
+| SC-A-M2 | surface/elab.ml | injection-width: remove the expected-width equality check | injection-width and injection-hostile-width accept invalid programs | KILLED |
+| SC-A-M3 | surface/elab.ml | unchecked-let: evaluate the let definition without its type precheck | all three AGGREGATE-CLI cases time out and fail | KILLED |
+| SC-A-M4 | lib/rules.ml | projection-depth: quote the inner first-projection motive without its outer self context | dependent-projection-family reports a universe error | KILLED |
+| SC-A-C1 | lib/rules.ml | projection-environment: omit outer self only from the temporary neutral frame's stored environment | suite remains 50/50 | EQUIVALENT CONTROL |
+
+SC-A-C1 is not counted as a killed mutant.  Review traced the temporary
+neutral to Eval.quote_neutral, which at this run copied its motive and
+branches without reading its stored environment.  The helper returns the
+quoted term before that environment can affect a checker or conversion
+call.  The production code retains the consistent self environment; the
+quotation depth that does affect the result is covered separately by
+SC-A-M4.  The review of 2026-09-08 made Eval.quote_neutral read that
+stored environment when it reads a motive back, so the equivalence
+argument above holds against the code as it stood at this run and the
+copy would have to run again to keep the label.
+
+The driver is `/Users/oobi/Documents/gpt13/taciturn-aggregate-mutations.py`.
+It accepts a mutation name to run one copy and refuses to overwrite an
+existing evidence directory.  The first run stops after SC-A-C1 survives;
+the separate `projection-depth` run supplies SC-A-M4.  Each copy retains
+build.log and test.log, and the two driver logs are
+`taciturn-aggregate-mutations.log` and `taciturn-aggregate-mutation-depth.log`
+under `/Users/oobi/Documents/gpt13`.
+
+### Review, 2026-09-08
+
+Two findings of the review touch the table above.
+
+- kernel-1, MEDIUM.  The readback fix makes Eval.quote_neutral read the
+  stored environment of a frozen elimination, so the equivalence argument
+  of SC-A-C1 is now stated against the code as it stood at the run.
+- elab-1, HIGH.  The three CLI cases of SC-A-M3 all stop at the let
+  definition precheck, and two carried a name for a precheck they never
+  reached.  The names now say what runs and the case count is four, so the
+  3/3 above is the count of the suite at the run and not of the suite now.

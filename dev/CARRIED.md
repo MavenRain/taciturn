@@ -27,6 +27,15 @@ normalized postulate linking and duplicate-global refusal.  The Stage K
 checker threads usage through the rule packs.  lib/rules.ml keeps checked
 lambda domains and annotation-aware binder marks, and directs extern
 argument checking through a ledger hook without counting an argument twice.
+Surface projections and pair eta share its dependent projection motives.
+The inner first projection carries a motive under both self binders, so
+the second projection's type is inferable and eta preserves that type.
+The projection branch takes the binder name of the source pair, so a
+refusal about a projection names a binder the reader can find in the
+program.  lib/eval.ml reads the motive of a frozen elimination back under
+a fresh self binder at the readback size, so the motive is scoped where
+the readback lands and a stuck projection inside a pair fibre keeps its
+type.
 lib/conv.ml keeps actual-head domain checks during spine conversion.
 lib/global.ml retains Extern and its signature checks.  lib/error.ml keeps
 the four taciturn-specific errors alongside the Stage K termination error.
@@ -39,7 +48,7 @@ the four taciturn-specific errors alongside the Stage K termination error.
 | lib/check.ml | c418062:lib/check.ml | 413 |
 | lib/conv.ml | c418062:lib/conv.ml | 43 |
 | lib/error.ml | c418062:lib/error.ml | 49 |
-| lib/eval.ml | c418062:lib/eval.ml | 2 |
+| lib/eval.ml | c418062:lib/eval.ml | 30 |
 | lib/global.ml | c418062:lib/global.ml | 78 |
 | lib/level.ml | c418062:lib/level.ml | 4 |
 | lib/level.mli | c418062:lib/level.mli | 4 |
@@ -50,7 +59,7 @@ the four taciturn-specific errors alongside the Stage K termination error.
 | lib/pp.ml | c418062:lib/pp.ml | 2 |
 | lib/prim.ml | c418062:lib/prim.ml | 2 |
 | lib/quantity.ml | c418062:lib/quantity.ml | 180 |
-| lib/rules.ml | c418062:lib/rules.ml | 396 |
+| lib/rules.ml | c418062:lib/rules.ml | 430 |
 | lib/shape.ml | c418062:lib/shape.ml | 2 |
 | lib/term.ml | c418062:lib/term.ml | 2 |
 | lib/totality.ml | c418062:lib/totality.ml | 2 |

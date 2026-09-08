@@ -36,12 +36,11 @@ lib/rules.ml	124	      (** Pack-directed subsingleton criterion for conversion (
 lib/rules.ml	314	    same weak-head check while preserving each rule's diagnostic. *)
 lib/rules.ml	334	(** A [let] binder for a partial view inside [beta]:  a view that does
 lib/rules.ml	357	(** The same for an elimination at the left former. *)
-lib/rules.ml	600	    the domain for the first projection and the fibre at it for the second. *)
-lib/rules.ml	1103	                "the constructor %s of %s gives the index %s and the type asks for %s"
-lib/rules.ml	1148	           (Printf.sprintf "the motive is built for %s and the scrutinee is at %s" mn n))
-lib/rules.ml	1170	    its universe for the large-elimination check. *)
-lib/rules.ml	1331	    branch. Right elimination remains reserved for M2 (SG-D4). *)
-lib/rules.ml	1353	(** The pack.  Each refusal sits at the field that answers for it
+lib/rules.ml	1105	                "the constructor %s of %s gives the index %s and the type asks for %s"
+lib/rules.ml	1150	           (Printf.sprintf "the motive is built for %s and the scrutinee is at %s" mn n))
+lib/rules.ml	1172	    its universe for the large-elimination check. *)
+lib/rules.ml	1333	    branch. Right elimination remains reserved for M2 (SG-D4). *)
+lib/rules.ml	1355	(** The pack.  Each refusal sits at the field that answers for it
 lib/term.ml	11	    [motive] mirrors tot's record field for field,
 lib/term.ml	87	(** M1 Stage G:  the third view, which the mu pack asks for the
 lib/term.ml	95	(** Shared exhaustive occurrence walk for structural order and strict
@@ -49,7 +48,7 @@ lib/totality.ml	8	    (kan-lang-tot-pin/lib/totality.ml:188) part for part.  Thi
 lib/totality.ml	11	    name ty body] answers [Ok (Some k)] for a body whose every
 lib/totality.ml	12	    recursive call decreases at formal position [k], [Ok None] for a
 lib/totality.ml	120	    [globals] stands in this signature for the reason it stands in
-surface/elab.ml	2	    from kanon de40d65 surface/elab.ml, not byte for byte, so this file
+surface/elab.ml	2	    from kanon c418062 surface/elab.ml, not byte for byte, so this file
 surface/elab.ml	3	    holds no carry header and dev/CARRIED.md wants no row for it;  the
-surface/elab.ml	17	    no kernel constructor at M0;  Stage C reads it for the two
+surface/elab.ml	277	   the same inferable motives for surface projections and pair eta. *)
 bin/taciturn.ml	111	    0 brief ban the mutable keywords, and the walk needs one write per

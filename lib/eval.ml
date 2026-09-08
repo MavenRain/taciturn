@@ -210,14 +210,10 @@ and replay (globals : Global.t) (head : Value.t) (frames : Value.spine list) :
 
 (** Readback, tot's [quote] with the diagram opened at the arity the pack
     reports.  [size] is the number of binders in scope, so a level [lvl]
-    reads back as the index [size - lvl - 1].
-
-    A frozen elimination reads back with the branch terms it froze.  They
-    are scoped in the environment the elimination captured, so the
-    readback of a frozen elimination is faithful only under that
-    environment.  Conversion never uses it:  it compares two frozen
-    eliminations by evaluating both branch bodies under fresh variables,
-    as tot does. *)
+    reads back as the index [size - lvl - 1].  A frozen elimination reads
+    its motive back under a fresh self binder at the current size, so the
+    motive is scoped where the readback is used.  Branch terms still carry
+    the environment they froze, and conversion compares them by evaluation. *)
 and quote (globals : Global.t) (size : int) (v : Value.t) : (Term.t, Error.t) result =
   match v with
   | Value.VUniv l -> Ok (Term.Univ l)
@@ -286,13 +282,22 @@ and quote_neutral (globals : Global.t) (size : int) (h : Value.head)
           Ok (Term.Out (s', a', t))
       | Value.SElim se ->
           let* s' = Rules.map_shape (quote globals size) se.Value.s_shape in
+          let* mo =
+            se.Value.s_motive
+            |> Option.fold ~none:(Ok None) ~some:(fun (m : Term.motive) ->
+                   let n : int = List.length m.Term.m_idx + 1 in
+                   let vs = List.init n (fun (i : int) -> Value.var (size + n - 1 - i)) in
+                   let* bv = eval globals (vs @ se.Value.s_env) m.Term.m_body in
+                   let* b = quote globals (size + n) bv in
+                   Ok (Some { m with Term.m_body = b }))
+          in
           Ok
             (Term.Elim
                {
                  Term.e_shape = s';
                  e_scrut = t;
                  e_scrut_q = se.Value.s_scrut_q;
-                 e_motive = se.Value.s_motive;
+                 e_motive = mo;
                  e_branches = se.Value.s_branches;
                }))
     (Ok head) (List.rev sp)

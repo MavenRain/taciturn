@@ -17,8 +17,10 @@ formers, four schema constructors and five shapes.
 Stages A and B deliver the kernel, surface and witness occurrence rule.
 Stage 0 supplies the validated row IR, L1 lowering, `.r1cs` and `.wtns`
 writers, blind JS reader, three-way WasmGC linking and circom comparison.
-The Stage K re-pin prepares Stage C: Field p, the row backend and two
-erasures.  Those Stage C features are not implemented yet.
+Aggregate elaboration lands before Stage C: dependent pairs, tuples, sums,
+projections and empty elimination now check through the existing kernel.
+Stage C, which M0-PLAN.md defines as Field p, the fragment and the rows,
+remains ahead.
 
 PIN records `c4180626123687858ff83408bab801c6f87e3e71` and the
 `vendor/kanon` submodule is checked out at that commit.  The kernel uses

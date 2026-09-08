@@ -203,6 +203,13 @@ two rows are new at taciturn M0 (D-M0-3).
 | `zk def name : A := t` | the `Def` node of `def`, with the zk flag set | sugar, not former.  D-M0-3 |
 | `(w x : A)` | the binder of the row above it, at `Quantity.W` | sugar, not former.  D-M0-3 |
 
+This slice elaborates every aggregate row above that has
+an M0 grammar production.  Pairs require an expected dependent pair type;
+annotations, declarations, applications, lets and enclosing introductions
+supply it.  Pair projections are `.1` and `.2`; tuple projections start
+at `.0`.  An injection's declared width must match its expected sum and
+its tag must name a leg.  The kernel rechecks every elaborated term.
+
 ZKMARK is the keyword pair `zk def`.  It reads as an attribute on `def`
 and it declares no second form:  the parser returns the same declaration
 node with a zk flag, so every rule over a declaration reads a zk
