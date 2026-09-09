@@ -366,3 +366,25 @@ applied.  Stage B delivers the other five.
 
 The eight extern rows of the ledger of section 6 link at Stage C.  Each
 one needs `Field p` or the row IR.  The two axioms link at Stage B.
+
+### Stage C backend slice, 2026-09-09
+
+`zk/` supplies a standalone BN254 host backend.  `Fp.t` is abstract and
+holds a canonical residue using Zarith.  Decimal input accepts at most
+77 digits and refuses values at or above the prime; signed machine
+integers used as coefficients reduce modulo the prime.
+
+`Rows` records bindings and constraints with explicit error values.
+Finishing a circuit requires all bindings and a satisfying witness.
+`Lower.compile` folds internal linear definitions, preserves interface
+wires and residual equations, and prunes unused internal wires.
+`R1cs.encode` and `Wtns.encode` accept only this private lowered type.
+Both encoders return bytes and leave file handling to the host.
+
+Select emits booleanity and computes `no + bit * (yes - no)`.
+The total inverse uses three rows: `a*i = 1-z`, `a*z = 0`, `z*i = 0`.
+These force `i = 0` at zero and the inverse otherwise; equality reads
+the zero indicator of the difference.  Row structure never reads the
+witness.  The low-level builder does not enforce the typed W-intro rule
+or detect every unconstrained input.  Fragment checking, Field surface
+types, RField, erasure and the circuit digest remain pending.

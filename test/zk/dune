@@ -1,0 +1,21 @@
+(library
+ (name circuits)
+ (modules circuits)
+ (libraries taciturn_zk))
+
+(test
+ (name backend)
+ (modules backend)
+ (libraries taciturn_zk circuits))
+
+(executable
+ (name probe)
+ (modules probe)
+ (libraries taciturn_zk circuits))
+
+(rule
+ (alias runtest)
+ (deps check.mjs ../../spike/rows/reader.mjs)
+ (action
+  (run node %{dep:check.mjs} %{exe:probe.exe}
+   %{exe:../../spike/rows/rows.exe} %{dep:../../spike/rows/reader.mjs})))

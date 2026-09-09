@@ -965,3 +965,136 @@ exclusion table holds 53 rows, and dev/carry-check.sh prints CARRY-OK over
 22 rows.  `zsh dev/dune.sh runtest --force` exits 0 with AGGREGATE 52/52,
 AGGREGATE-CLI 4/4, PARSE-OK 13/13, CHECK-OK 15/15, NEG-OK 23/23 and
 REPIN 19/19, and `zsh dev/stage-a-gates.sh` prints GATES-OK.
+
+## 2026-09-09 Stage C backend slice
+
+Base: a5206cd, the committed aggregate elaboration slice.  Work and
+validation run in `/Users/oobi/Documents/gpt2/taciturn-stage-c` before
+transfer to the main checkout.  This delivers the standalone backend
+portion of M0-PLAN section 9 Stage C, with no claim of Stage C exit.
+
+`taciturn_zk` supplies abstract BN254 residues through the existing
+Zarith dependency, a checked persistent row builder, L1 substitution
+and pruning, and pure R1CS v1 and WTNS v2 encoders.  State and circuit
+construction are protected by module interfaces.  Both encoders take
+one private lowered circuit, so a caller cannot pass an unrelated
+constraint list or an unpruned witness.  Binding errors are explicit,
+wire 0 cannot be rebound, counts are checked before addition, and
+finishing requires a complete witness that satisfies every row.
+
+The row helpers constrain select, total inverse and equality.  Select
+adds booleanity; inverse constrains its zero case with a third product
+row.  Their row structure is independent of input values.  The builder
+is deliberately low level: arbitrary rows and unused inputs remain
+possible, and it is not the future typed fragment checker.
+
+Field surface definitions, RField and representation conformance, the
+flat-fragment and W-intro checks, two erasures, extern integration and
+the circuit digest remain pending.  The public driver still names their
+stages.  The kernel, its pin, the carry table and the Stage 0 oracle
+sources have no changes in this slice.
+
+Validation on 2026-09-09:
+
+- `env -u OPAM_SWITCH_PREFIX zsh dev/dunecho.sh build`: zero errors and
+  zero warnings.  The environment setting selects the repository's
+  zxcaml-p1 tools without an inherited opam switch prefix.
+- `env -u OPAM_SWITCH_PREFIX zsh dev/dune.sh runtest`: exit 0 across the
+  existing suites and the backend suite.  Capture:
+  `/Users/oobi/Documents/gpt2/.kanon-exec/run-edMfwS`.
+- `zsh dev/zk-backend-gates.sh /Users/oobi/Documents/taciturn/spike/out/pot8_final.ptau`:
+  BACKEND 37/37, BACKEND-JS 24/24, eight snarkjs witness checks, and
+  PLONK setup, prove and verify on multiplication and MiMC-3 all pass.
+  The capture named here predates the review, so it holds the earlier
+  BACKEND 35/35 and BACKEND-JS 21/21.  The two numbers above come from
+  the rerun stated under Review, 2026-09-09.  Capture:
+  `/Users/oobi/Documents/gpt2/.kanon-exec/run-NL3y5c`.
+- The JS suite compares 512 field vectors against JS BigInt and six
+  multiplication/MiMC-3 pairs byte for byte against the unchanged spike.
+  Its blind reader accepts all six pairs.  Counts remain one constraint
+  and four wires for multiplication, twelve and fifteen for MiMC-3.
+- Altered public outputs, inverse wires, nonboolean equality outputs,
+  and a complete nonboolean select interpolation fail independent
+  constraint evaluation.  Repeated definitions retain residual equations,
+  cyclic definitions terminate, and unused interface wires survive pruning.
+- `python3 -I dev/zk-backend-mutate.py`: three compiling mutants caught
+  by their named native checks.  Capture:
+  `/Users/oobi/Documents/gpt2/.kanon-exec/run-vGolM9`.
+- `env -u OPAM_SWITCH_PREFIX zsh dev/stage-a-gates.sh`: all eight gates
+  pass, including 22 carry rows, the pinned R0 counts, the vendor pin,
+  house exclusions and prose checks.  Capture:
+  `/Users/oobi/Documents/gpt2/.kanon-exec/run-xLU6Z2`.
+
+The prepared ptau is the Stage 0 development artifact at
+spike/out/pot8_final.ptau, 296360 bytes.  dev/roundtrip.sh makes the
+file again with a new contribution on each S0-G7 run, so its SHA-256
+changes between runs and no fixed digest applies.
+This checks backend compatibility; it does not discharge the production
+setup decision D-M0-6 or the language-level M0 gate.
+
+### Review, 2026-09-09
+
+The review of this slice returned seven findings.  All seven are applied.
+
+- field-1, MEDIUM, zk/binary.ml:4.  Binary.unsigned truncated the
+  magnitude of its argument, so a negative count would have written the
+  low bytes of the absolute value and drifted from spike/rows/r1cs.ml,
+  which writes the low bytes of the two's complement value.  The width
+  now comes from Z.extract, so u32 of minus one is four 0xff bytes and
+  u32 of 2 ^ 32 plus 5 equals u32 of 5, the rows u32-negative and
+  u32-wraps in test/zk/backend.ml hold both cases, and zk/dune no
+  longer keeps binary private.
+- tests-3, MEDIUM, dev/zk-backend-mutate.py:48.  The driver looked for
+  the failing check name anywhere in the mutant stderr, so the sibling
+  name select-rejects-two-equal-branches alone satisfied the SC-B-M1
+  cell.  The condition now matches a whole stderr line through
+  splitlines, and dev/MUTATION-LOG.md states that rule.
+- tests-1, MEDIUM, test/zk/probe.ml:7.  A prefix in a directory that
+  does not exist, an unwritable prefix, or a missing field vector file,
+  raised Sys_error and exited 2 in place of a refusal.  The probe now
+  holds each open in a handler for Sys_error, so every refusal from the
+  operating system exits 1 through bad with a message that starts with
+  io:, and both encodings finish before any file is opened.  Three
+  cases in test/zk/check.mjs hold a missing directory, a directory with
+  mode 500 and a missing field vector file.  The first form of this fix
+  tested the path with Sys.file_exists, which left the unwritable
+  prefix of the finding title open; the handler closes that input and
+  two more, a prefix whose parent is a regular file and a fields
+  argument that names a directory.
+- tests-2, MEDIUM, dev/M0-BUILD-LOG.md:1027.  This log pinned a SHA-256
+  for spike/out/pot8_final.ptau that the file does not carry, because
+  dev/roundtrip.sh makes the artifact again with a new contribution on
+  each S0-G7 run.  The paragraph now states the size and the reason no
+  fixed digest applies.
+- field-2, MEDIUM, zk/fp.ml:19.  Fp.of_decimal nested an if inside the
+  else branch of an if, which the house rule sends to match () with
+  guards.  The definition now reads as three guards and a final case,
+  and the seven decimal checks in test/zk/backend.ml pass under their
+  own names.
+- tests-4, LOW, test/zk/check.mjs:173.  The JS suite printed its check
+  counter over itself, so a deleted case would still print N over N and
+  exit 0.  The file now holds a fixed expected count, tests the counter
+  against it before the report line, and prints that count as the
+  denominator.
+- docs-2, LOW, dev/MUTATION-LOG.md:324.  The Stage C mutation table had
+  no file column, no line, no before and after text, and it ended in
+  CAUGHT where every earlier table ends in KILLED.  The table now
+  follows the house five column form with the exact edit and the exact
+  diagnostic, and the paragraph below it says where the mutant logs
+  stay and that the driver leaves each mutant build directory on disk.
+
+No finding is skipped.  `env -u OPAM_SWITCH_PREFIX zsh dev/dunecho.sh
+build` reports zero errors and zero warnings, and `env -u
+OPAM_SWITCH_PREFIX zsh dev/dune.sh runtest --force` exits 0 with
+BACKEND 37/37 and `BACKEND-JS 24/24, 512 field vectors, 6 spike pairs`,
+beside AGGREGATE 52/52, AGGREGATE-CLI 4/4, PARSE-OK 13/13, CHECK-OK
+15/15, NEG-OK 23/23 and REPIN 19/19.  Two native checks and three JS
+cases are new, so the backend counts move from 35 and 21 to 37 and 24.
+`zsh dev/zk-backend-gates.sh spike/out/pot8_final.ptau` prints
+BACKEND-SNARKJS PASS 8 witnesses, BACKEND-PLONK PASS mul mimc3 and
+BACKEND-GATES-OK with exit 0, `python3 -I dev/zk-backend-mutate.py`
+prints BACKEND-MUTATIONS-OK 3/3, and `zsh dev/stage-a-gates.sh` prints
+GATES-OK with SA-G2 CARRY-OK 22 rows and SA-G8 prose 0 dash characters
+over 162 files.  `zsh dev/stage-b-gates.sh` prints GATES-OK with SB-G9
+kernel lines 2998/3000, and `zsh dev/spike-gates.sh` prints GATES-OK
+with S0-G11 BENCH true.

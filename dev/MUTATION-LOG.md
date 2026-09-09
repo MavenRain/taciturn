@@ -312,3 +312,29 @@ Two findings of the review touch the table above.
   definition precheck, and two carried a name for a precheck they never
   reached.  The names now say what runs and the case count is four, so the
   3/3 above is the count of the suite at the run and not of the suite now.
+
+## 2026-09-09 Stage C backend mutations
+
+`python3 -I dev/zk-backend-mutate.py` builds each mutant in a separate
+copy under `.gatework/backend-mutants`.  DUNE_ROOT names that copy
+explicitly.  A compiler refusal does not count as a caught mutant.
+Each build must report zero errors and warnings, and its native test
+executable must exit 1 with the named diagnostic on a line of its own.
+
+| id | file | the edit | killed by | verdict |
+| --- | --- | --- | --- | --- |
+| SC-B-M1 | zk/rows.ml line 95 | `let* st = assert_bit st bit in` to `let* st = Ok st in`, so select drops the booleanity row | `BACKEND FAIL select-rejects-two`, exit 1 | KILLED |
+| SC-B-M2 | zk/lower.ml line 47 | `if linear r && k.c = [] then None else Some k` to `if linear r then None else Some k`, so every linear row is discarded after substitution | `BACKEND FAIL repeated-definition`, exit 1 | KILLED |
+| SC-B-M3 | zk/lower.ml line 18 | `Wires.bindings merged` to `List.rev (Wires.bindings merged)`, so each linear combination is emitted in descending wire order | `BACKEND FAIL canonical-terms`, exit 1 | KILLED |
+
+All three compiled and were caught on 2026-09-09.  Capture:
+`/Users/oobi/Documents/gpt2/.kanon-exec/run-vGolM9`.
+Each mutant keeps its build.log and its test.log beside the mutant
+sources under `.gatework/backend-mutants`, which `.gitignore` excludes
+from the repository.  The driver does not delete a mutant build
+directory, so one run leaves about 18 megabytes on disk.
+The unchanged control passed BACKEND 37/37 and BACKEND-JS 24/24.  The
+capture named above predates the review, so it holds the earlier control
+numbers BACKEND 35/35 and BACKEND-JS 21/21.  The two numbers here come
+from the rerun of 2026-09-09 that dev/M0-BUILD-LOG.md states under
+Review, 2026-09-09.

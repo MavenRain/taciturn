@@ -1,0 +1,3 @@
+(library
+ (name taciturn_zk)
+ (libraries zarith))
