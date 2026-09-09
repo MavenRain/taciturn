@@ -338,3 +338,35 @@ capture named above predates the review, so it holds the earlier control
 numbers BACKEND 35/35 and BACKEND-JS 21/21.  The two numbers here come
 from the rerun of 2026-09-09 that dev/M0-BUILD-LOG.md states under
 Review, 2026-09-09.
+
+## 2026-09-09 Stage C circuit identity mutations
+
+`python3 -I dev/zk-digest-mutate.py` builds isolated copies under
+`.gatework/digest-mutants`, with DUNE_ROOT set to each copy.  Every
+mutant must compile with zero errors and warnings, then exit 1 from
+its named suite with its exact named diagnostic.  The named suite is
+the native identity suite or the Node oracle.  Compilation failures
+do not count as kills.  The unchanged control passes DIGEST 46/46 and
+DIGEST-JS 24/24.
+
+| id | file | the edit | killed by | verdict |
+| --- | --- | --- | --- | --- |
+| SC-D-M1 | zk/digest.ml, witness bytes | prepend `String.concat "" (List.map Fp.to_bytes_le c.witness)` before `"taciturn-circuit\000"` | `DIGEST FAIL mul-witness-1000`, exit 1 | KILLED |
+| SC-D-M2 | zk/digest.ml, pre namespace | `framed "pre"; to_hex imports.pre;` to `framed "pre"; to_hex imports.zk;` | `DIGEST FAIL pre-import`, exit 1 | KILLED |
+| SC-D-M3 | zk/digest.ml, row selectors | `[ r.ql; r.qr; r.qo; r.qm; r.qc ]` to `[ r.ql; r.qr; r.qo; r.qm; Fp.zero ]` | `DIGEST FAIL selector-qc`, exit 1 | KILLED |
+| SC-D-M4 | zk/digest.ml, row list | `let rows = c.rows in` to a filter removing rows with qm = 1 and ql = -1 before counting and encoding | `DIGEST FAIL booleanity-row`, exit 1 | KILLED |
+| SC-D-M5 | zk/digest.ml, public output count | `Binary.u32 c.n_pub_out;` to `Binary.u32 1;` | `DIGEST FAIL public-output-count-isolated`, exit 1 | KILLED |
+| SC-D-M6 | zk/digest.ml, public input count | `Binary.u32 c.n_pub_in;` to `Binary.u32 0;` | `DIGEST FAIL public-input-count`, exit 1 | KILLED |
+| SC-D-M7 | zk/digest.ml, private input count | `Binary.u32 c.n_priv;` to `Binary.u32 0;` | `DIGEST FAIL private-input-count-isolated`, exit 1 | KILLED |
+| SC-D-M8 | zk/digest.ml, domain string | drop `"taciturn-circuit\000"; ` from the field list | `DIGEST-JS FAIL mul-encoding-0`, exit 1 | KILLED |
+| SC-D-M9 | zk/digest.ml, format version | `Binary.u32 1;` to `Binary.u32 2;` after the domain | `DIGEST-JS FAIL mul-encoding-0`, exit 1 | KILLED |
+| SC-D-M10 | zk/digest.ml, frame width | `Binary.u64 (String.length s)` to `Binary.u32 (String.length s)` | `DIGEST-JS FAIL mul-encoding-0`, exit 1 | KILLED |
+| SC-D-M11 | zk/digest.ml, wire count | `Binary.u32 c.n_wires;` to `Binary.u32 0;` | `DIGEST FAIL allocated-wires`, exit 1 | KILLED |
+
+The first four compiled and were caught on 2026-09-09.  Capture:
+`/Users/oobi/Documents/gpt1/.kanon-exec/run-0wsrvL`.  SC-D-M5 to
+SC-D-M11 were added by the review of the slice on 2026-09-09 and all
+eleven were caught in the local re-run, DIGEST-MUTATIONS-OK 11/11.
+The script retains each mutant's sources, build.log and test.log in
+its ignored build directory.  The exact replacement strings are in
+`dev/zk-digest-mutate.py`.

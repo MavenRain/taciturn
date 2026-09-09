@@ -1098,3 +1098,121 @@ GATES-OK with SA-G2 CARRY-OK 22 rows and SA-G8 prose 0 dash characters
 over 162 files.  `zsh dev/stage-b-gates.sh` prints GATES-OK with SB-G9
 kernel lines 2998/3000, and `zsh dev/spike-gates.sh` prints GATES-OK
 with S0-G11 BENCH true.
+
+## 2026-09-09 Stage C circuit identity slice
+
+Base: 6e6765c, the committed backend slice.  Implementation and checks
+run in `/Users/oobi/Documents/gpt1/taciturn-digest` before transfer to
+the main checkout.  This completes the backend digest component of
+Stage C, without claiming Stage C exit or the language-level M0 gate.
+
+`zk/digest.ml` encodes the ordered rows before L1, prime, interface
+counts, allocated wire count, sorted width table, three named import
+hashes and compiler version.  Witness values are absent.  Abstract hash
+and context types validate metadata before encoding.  The separate
+`taciturn_zk_host` library invokes `/usr/bin/shasum` with binary mode,
+checks status and output, and cleans its temporary preimage file.
+`dev/DIGEST.md` pins every byte field and the metadata obligations of
+future callers.  D-M0-2's SHA-256 recommendation is used provisionally.
+
+The native corpus checks all five selectors, all three wire positions,
+row ordering and count, each interface count on its own with the wire
+count held equal, import namespaces, widths and compiler changes.
+Multiplication, MiMC-3, inverse, equality and select each retain
+identical preimage bytes across 1,000 witness substitutions.  The
+independent JS oracle constructs the complete multiplication, MiMC-3,
+inverse, equality and select preimages with BigInt and compares SHA-256
+using Node crypto.  Host cases cover temporary-file cleanup, spaces,
+shell metacharacters, newlines and backslashes in paths, an absent
+temporary directory, PATH shadowing and a Perl module path override.
+Standard empty-string and abc hash vectors also pass.
+
+Validation on 2026-09-09:
+
+- `zsh dev/zk-digest-gates.sh`: zero build errors and warnings,
+  DIGEST 46/46, DIGEST-JS 24/24 and DIGEST-GATES-OK.
+  Capture: `/Users/oobi/Documents/gpt1/.kanon-exec/run-YIxIRq`.
+- `env -u OPAM_SWITCH_PREFIX zsh dev/dune.sh runtest`: exit 0 across
+  the repository suites, including BACKEND 37/37 and the unchanged
+  kernel and aggregate suites.  The digest results from the preceding
+  scoped run are reused by Dune.
+  Capture: `/Users/oobi/Documents/gpt1/.kanon-exec/run-ojjU0y`.
+- `python3 -I dev/zk-digest-mutate.py`: eleven compiling mutants caught
+  by their named checks, DIGEST-MUTATIONS-OK 11/11.
+  Capture: `/Users/oobi/Documents/gpt1/.kanon-exec/run-0wsrvL`.
+- `env -u OPAM_SWITCH_PREFIX zsh dev/stage-a-gates.sh`: all eight
+  gates pass, including 22 carry rows, the pinned R0 counts, house
+  exclusions and prose checks.  SPEC.md is 399/400 lines.
+  Capture: `/Users/oobi/Documents/gpt1/.kanon-exec/run-66B5om`.
+
+Typed width production, Field surface definitions, the fragment and
+W-intro integration, RField, two erasures, actual import implementation
+hashes, the public `digest FILE` verb and zkey naming remain ahead.
+The API accepts caller-provided metadata and does not attest its origin.
+Existing kernel, row lowering and serializer sources are unchanged.
+
+### Review of the circuit identity slice, 2026-09-09
+
+The review of this slice returned seven findings.  All seven are applied.
+
+- suite-1, MEDIUM, test/digest/identity.ml:72.  The two interface-count
+  checks each moved two counts at once and nothing varied n_pub_in
+  alone, so a mutant that fixed n_pub_out, n_pub_in or n_priv to a
+  constant passed DIGEST 42/42.  A fresh_wire fixture with one public
+  output and one fresh wire now pairs with three bare circuits of equal
+  wire count, so the checks public-output-count-isolated,
+  public-input-count and private-input-count-isolated each vary exactly
+  one count, and the mutants SC-D-M5 to SC-D-M7 are caught by name.
+- host-1, MEDIUM, zk_host/hash.ml:17.  The child shasum inherited the
+  whole parent environment, and a stub Digest::SHA module on PERL5LIB
+  forged an all-zero digest with exit 0.  The host now spawns
+  /usr/bin/shasum through Unix.open_process_args_full with the explicit
+  environment PATH=/usr/bin:/bin, drains the child stderr before the
+  close, and the case perl-module-path in test/digest/check.mjs holds
+  the override.
+- oracle-3, MEDIUM, dev/zk-digest-mutate.py:49.  The driver judged a
+  kill from identity.exe alone, so the domain string, the format version
+  and the framing width could hold no mutant.  Every MUTANTS entry now
+  names its suite, the driver runs test/digest/check.mjs on each mutant
+  and accepts a kill from the named suite only, and the mutants SC-D-M8
+  to SC-D-M11 pin the domain, the format version, the frame width and
+  the wire count; dev/MUTATION-LOG.md labels SC-D-M1 as witness bytes
+  and quotes its anchor with one backslash.
+- host-2, MEDIUM, zk_host/hash.ml:42.  A failed removal of the
+  temporary file replaced a Process or Output error, so the caller saw a
+  digest-io message in place of the hash failure.  The removal still
+  runs on every path, and the hash result now has precedence over the
+  cleanup result through Result.bind and Result.map; the temporary path
+  cases and temporary-missing still pass.
+- oracle-2, LOW, test/digest/check.mjs:104.  Both suite totals were the
+  count of cases that ran, so a dropped case still printed the same
+  number twice and the gate still passed.  test/digest/check.mjs asserts
+  checks against the literal 24 and test/digest/identity.ml refuses a
+  tests list whose length is not 46 with DIGEST COUNT, so the printed
+  totals are pinned.
+- oracle-4, LOW, test/digest/probe.ml:15.  The Node oracle compared
+  bytes for mul and mimc3 only, so the inverse, equality and select row
+  shapes, including the row with qo equal to one, reached the encoder
+  through OCaml-against-OCaml checks only.  The probe accepts the kinds
+  inverse, equality and select, and check.mjs builds their preimages
+  with BigInt from the row lists of zk/rows.ml and compares the bytes
+  and the SHA-256 for each, six new cases.
+- host-3, LOW, zk_host/hash.ml:7.  The diagnostics digest-hash-signal
+  and digest-hash-stopped printed the OCaml portable signal code, so a
+  killed shasum reported minus 7 in place of a name.  A signal_name
+  helper maps kill, term, int, segv and pipe to their names and any
+  other code to ocamlN, the check signal-name in test/digest/identity.ml
+  holds sigkill, and the identity stanza in test/digest/dune gains the
+  unix library.
+
+Re-measured on 2026-09-09 after the fixes: `zsh dev/dunecho.sh build`
+prints OK build: 0 errors, 0 warnings; `zsh dev/dune.sh runtest --force`
+exits 0 with DIGEST 46/46, DIGEST-JS 24/24, BACKEND 37/37, BACKEND-JS
+24/24 and AGGREGATE-CLI 4/4; `zsh dev/zk-digest-gates.sh` prints
+DIGEST-GATES-OK; `python3 -I dev/zk-digest-mutate.py` prints
+DIGEST-MUTATIONS-OK 11/11 with seven native and four oracle kills;
+`zsh dev/zk-backend-gates.sh` without a ptau prints BACKEND-GATES-OK;
+`zsh dev/stage-a-gates.sh` prints GATES-OK with SPEC.md at 399/400 lines
+and 0 dash characters.  The kernel, vendor, spike and test/zk trees are
+unchanged.  SPEC.md and README.md state no count of this slice and are
+unchanged by the review.

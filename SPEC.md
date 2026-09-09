@@ -387,4 +387,13 @@ These force `i = 0` at zero and the inverse otherwise; equality reads
 the zero indicator of the difference.  Row structure never reads the
 witness.  The low-level builder does not enforce the typed W-intro rule
 or detect every unconstrained input.  Fragment checking, Field surface
-types, RField, erasure and the circuit digest remain pending.
+types, RField and erasure remain pending.
+
+### Stage C circuit identity slice, 2026-09-09
+
+`Digest.encode` binds the ordered rows before L1, BN254 prime, interface
+and wire counts, sorted width table, three named import-set SHA-256
+hashes and compiler version.  Witness values never enter its bytes.
+`taciturn_zk_host.Hash` computes SHA-256 through `/usr/bin/shasum`.
+`dev/DIGEST.md` pins the encoding and caller obligations.  The public
+`digest FILE` command still awaits typed-fragment and host integration.

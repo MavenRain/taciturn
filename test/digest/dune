@@ -1,0 +1,14 @@
+(test
+ (name identity)
+ (modules identity)
+ (libraries taciturn_zk taciturn_zk_host circuits unix))
+
+(executable
+ (name probe)
+ (modules probe)
+ (libraries taciturn_zk taciturn_zk_host circuits))
+
+(rule
+ (alias runtest)
+ (deps check.mjs)
+ (action (run node %{dep:check.mjs} %{exe:probe.exe})))

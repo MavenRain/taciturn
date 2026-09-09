@@ -1,0 +1,3 @@
+(library
+ (name taciturn_zk_host)
+ (libraries taciturn_zk unix))
